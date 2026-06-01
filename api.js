@@ -61,5 +61,8 @@ window.Api = (function () {
 
     getSettings() { return req("/settings").then((r) => r.settings); },
     saveSettings(d) { return req("/settings", "PUT", d).then((r) => r.settings); },
+
+    listBranchCodes() { return req("/branch-codes").then((r) => r.codes); },
+    regenBranchCode(branch) { return req("/branch-codes", "POST", { branch }); },
   };
 })();

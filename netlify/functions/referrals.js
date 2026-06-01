@@ -1,10 +1,15 @@
-/* Referrals CRUD. Team-shared: any authenticated user sees all referrals.
- * Sensitive fields are encrypted at rest in the `enc` jsonb column.
+/* Referrals CRUD with branch access control.
+ *  - Admins see and manage every branch.
+ *  - Branch users only ever see/modify their own branch's referrals
+ *    (enforced here on the server, not just in the UI).
+ * Sensitive fields are encrypted at rest in the `enc` jsonb column. Branch is
+ * inside that blob, so scoping is applied after decryption.
  */
-const { sql, ensureSchema } = require("./_lib/db");
+const { sql, ensureSchema, getAccount } = require("./_lib/db");
 const { requireUser } = require("./_lib/auth");
 const { encrypt, decrypt } = require("./_lib/crypto");
 const { json } = require("./_lib/respond");
+const { BRANCHES } = require("./_lib/branches");
 
 function rowToReferral(r) {
   const d = decrypt(r.enc);
@@ -23,8 +28,7 @@ function rowToReferral(r) {
   };
 }
 
-// Re-read a single referral (with owner join) after insert/update.
-async function fetchOne(q, id) {
+async function fetchRow(q, id) {
   const rows = await q`
     SELECT r.id, to_char(r.date, 'YYYY-MM-DD') AS date, r.type, r.status, r.enc, r.created_at,
            u.name AS owner_name, u.email AS owner_email
@@ -47,12 +51,15 @@ function validate(b) {
 }
 
 exports.handler = async (event) => {
-  const user = requireUser(event);
-  if (!user) return json(401, { error: "Not authenticated" });
+  const token = requireUser(event);
+  if (!token) return json(401, { error: "Not authenticated" });
 
   try {
     await ensureSchema();
     const q = sql();
+    const user = await getAccount(token.sub);
+    if (!user) return json(401, { error: "Not authenticated" });
+    const isAdmin = user.role === "admin";
     const method = event.httpMethod;
     const id = event.queryStringParameters && event.queryStringParameters.id;
 
@@ -62,7 +69,9 @@ exports.handler = async (event) => {
                u.name AS owner_name, u.email AS owner_email
         FROM referrals r LEFT JOIN users u ON u.id = r.owner_id
         ORDER BY r.date DESC, r.created_at DESC`;
-      return json(200, { referrals: rows.map(rowToReferral) });
+      let out = rows.map(rowToReferral);
+      if (!isAdmin) out = out.filter((r) => r.branch === user.branch);
+      return json(200, { referrals: out });
     }
 
     if (method === "POST" || method === "PUT") {
@@ -70,30 +79,45 @@ exports.handler = async (event) => {
       try { b = JSON.parse(event.body || "{}"); } catch (e) { return json(400, { error: "Invalid JSON" }); }
       const v = validate(b);
       if (v.error) return json(400, { error: v.error });
+
+      // Branch users are pinned to their own branch; admins choose one.
+      const branch = isAdmin ? String(b.branch || "").trim() : (user.branch || "");
+      if (!branch) return json(400, { error: "Branch is required" });
+      if (isAdmin && !BRANCHES.includes(branch)) return json(400, { error: "Unknown branch" });
+
       const enc = JSON.stringify(
-        encrypt({ employee: b.employee, branch: b.branch, client: b.client, amount: v.amount, notes: b.notes })
+        encrypt({ employee: b.employee, branch, client: b.client, amount: v.amount, notes: b.notes })
       );
 
       if (method === "POST") {
         const ins = await q`
           INSERT INTO referrals (owner_id, date, type, status, enc)
-          VALUES (${user.sub}, ${v.date}, ${v.type}, ${v.status}, ${enc}::jsonb)
+          VALUES (${user.id}, ${v.date}, ${v.type}, ${v.status}, ${enc}::jsonb)
           RETURNING id`;
-        return json(200, { referral: await fetchOne(q, ins[0].id) });
+        return json(200, { referral: await fetchRow(q, ins[0].id) });
       }
 
       if (!id) return json(400, { error: "Missing id" });
+      const current = await fetchRow(q, id);
+      if (!current) return json(404, { error: "Referral not found" });
+      if (!isAdmin && current.branch !== user.branch) return json(403, { error: "Not allowed" });
+
       const upd = await q`
         UPDATE referrals
         SET date = ${v.date}, type = ${v.type}, status = ${v.status}, enc = ${enc}::jsonb, updated_at = now()
         WHERE id = ${id}
         RETURNING id`;
       if (!upd.length) return json(404, { error: "Referral not found" });
-      return json(200, { referral: await fetchOne(q, id) });
+      return json(200, { referral: await fetchRow(q, id) });
     }
 
     if (method === "DELETE") {
       if (!id) return json(400, { error: "Missing id" });
+      if (!isAdmin) {
+        const current = await fetchRow(q, id);
+        if (!current) return json(404, { error: "Referral not found" });
+        if (current.branch !== user.branch) return json(403, { error: "Not allowed" });
+      }
       await q`DELETE FROM referrals WHERE id = ${id}`;
       return json(200, { ok: true });
     }

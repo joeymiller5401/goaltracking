@@ -81,7 +81,7 @@
         <div class="panel-head">
           <h2>Dashboard</h2>
           <div class="filter-inline">
-            <label>Branch
+            <label id="dash-branch-label">Branch
               <select id="dash-branch">
                 <option value="all">All branches</option>
               </select>
@@ -99,7 +99,7 @@
 
         <div class="cards" id="summary-cards"></div>
 
-        <div class="card-block">
+        <div class="card-block" id="branch-card">
           <h3>By branch</h3>
           <p class="muted small">Active referrals per branch for the selected period (all branches, regardless of the branch filter above).</p>
           <table class="data" id="branch-table">
@@ -199,6 +199,18 @@
       <!-- SETTINGS -->
       <section class="panel" id="tab-settings">
         <div class="panel-head"><h2>Settings</h2></div>
+
+        <div class="card-block" id="admin-panel" hidden>
+          <h3>Branch signup codes <span class="badge admin-badge">Admin</span></h3>
+          <p class="muted small">Each branch has its own code. Share a branch's code only with that branch's staff — anyone who signs up with it can see and manage that branch's referrals. Regenerate a code to revoke the old one (existing accounts stay signed in).</p>
+          <table class="data" id="branch-codes-table">
+            <thead>
+              <tr><th>Branch</th><th>Signup code</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
         <div class="card-block narrow">
           <h3>Credit rates</h3>
           <p class="muted small">Initial and additional funds are credited differently. These rates drive the “Credit $” estimates on the dashboard and are shared across the team.</p>

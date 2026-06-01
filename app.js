@@ -66,8 +66,29 @@
   function showApp() {
     authScreen.hidden = true;
     appRoot.hidden = false;
+    applyRole();
+  }
+
+  function isAdmin() {
     const u = Api.currentUser();
-    $("#user-name").textContent = u ? (u.name || u.email) : "";
+    return !!(u && u.role === "admin");
+  }
+
+  // Show/hide cross-branch UI based on the signed-in user's role.
+  function applyRole() {
+    const u = Api.currentUser() || {};
+    const admin = u.role === "admin";
+    $("#user-name").textContent =
+      (u.name || u.email || "") + (admin ? " · Admin" : (u.branch ? " · " + u.branch : ""));
+    $("#dash-branch-label").hidden = !admin;
+    $("#branch-card").hidden = !admin;
+    $("#admin-panel").hidden = !admin;
+    // Credit rates are shared across the team — admins only.
+    $("#rate-initial").disabled = !admin;
+    $("#rate-additional").disabled = !admin;
+    $("#save-settings").disabled = !admin;
+    if (!admin) $("#dash-branch").value = "all";
+    if (admin) renderBranchCodes();
   }
 
   Api.onUnauthorized = () => {
@@ -269,7 +290,14 @@
     $("#ref-date").value = editing ? editing.date : todayISO();
     $("#ref-type").value = editing ? editing.type : "initial";
     $("#ref-employee").value = editing ? editing.employee : "";
-    $("#ref-branch").value = editing ? editing.branch || "" : "";
+    if (isAdmin()) {
+      $("#ref-branch").disabled = false;
+      $("#ref-branch").value = editing ? editing.branch || "" : "";
+    } else {
+      // Branch users are pinned to their own branch.
+      $("#ref-branch").value = (Api.currentUser() || {}).branch || "";
+      $("#ref-branch").disabled = true;
+    }
     $("#ref-client").value = editing ? editing.client : "";
     $("#ref-amount").value = editing ? editing.amount : "";
     $("#ref-status").value = editing ? editing.status : "pending";
@@ -291,7 +319,7 @@
       date: $("#ref-date").value,
       type: $("#ref-type").value,
       employee: $("#ref-employee").value.trim(),
-      branch: $("#ref-branch").value.trim(),
+      branch: isAdmin() ? $("#ref-branch").value : ((Api.currentUser() || {}).branch || ""),
       client: $("#ref-client").value.trim(),
       amount: parseFloat($("#ref-amount").value) || 0,
       status: $("#ref-status").value,
@@ -400,7 +428,13 @@
     $("#goal-id").value = editing ? editing.id : "";
     $("#goal-name").value = editing ? editing.name : "";
     $("#goal-metric").value = editing ? editing.metric : "amount";
-    $("#goal-branch").value = editing ? editing.branch || "" : "";
+    if (isAdmin()) {
+      $("#goal-branch").disabled = false;
+      $("#goal-branch").value = editing ? editing.branch || "" : "";
+    } else {
+      $("#goal-branch").value = (Api.currentUser() || {}).branch || "";
+      $("#goal-branch").disabled = true;
+    }
     $("#goal-fundtype").value = editing ? editing.fundType || "total" : "total";
     $("#goal-target").value = editing ? editing.target : "";
     $("#goal-start").value = editing ? editing.start || "" : "";
@@ -421,7 +455,7 @@
     const data = {
       name: $("#goal-name").value.trim(),
       metric: $("#goal-metric").value,
-      branch: $("#goal-branch").value,
+      branch: isAdmin() ? $("#goal-branch").value : ((Api.currentUser() || {}).branch || ""),
       fundType: $("#goal-fundtype").value,
       target: parseFloat($("#goal-target").value) || 0,
       start: $("#goal-start").value || "",
@@ -589,6 +623,51 @@
       setTimeout(() => (note.hidden = true), 1800);
       renderDashboard();
     } catch (err) { alert("Could not save settings: " + err.message); }
+  });
+
+  // ---- Admin: branch signup codes -----------------------------------------
+  async function renderBranchCodes() {
+    const tbody = $("#branch-codes-table tbody");
+    if (!tbody) return;
+    try {
+      const codes = await Api.listBranchCodes();
+      tbody.innerHTML = codes
+        .map(
+          (c) => `<tr data-branch="${esc(c.branch)}">
+            <td>${esc(c.branch)}</td>
+            <td><code class="code">${esc(c.code)}</code></td>
+            <td class="row-actions">
+              <button class="link-btn" data-act="copy">Copy</button>
+              <button class="link-btn" data-act="regen">Regenerate</button>
+            </td>
+          </tr>`
+        )
+        .join("");
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="3" class="muted">Could not load codes: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  $("#branch-codes-table tbody").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    const tr = e.target.closest("tr");
+    const branch = tr.dataset.branch;
+    const codeEl = tr.querySelector(".code");
+    if (btn.dataset.act === "copy") {
+      try {
+        await navigator.clipboard.writeText(codeEl.textContent);
+        const prev = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(() => (btn.textContent = prev), 1200);
+      } catch (err) { /* clipboard unavailable */ }
+    } else if (btn.dataset.act === "regen") {
+      if (!confirm(`Regenerate the signup code for ${branch}? The old code stops working immediately.`)) return;
+      try {
+        const r = await Api.regenBranchCode(branch);
+        codeEl.textContent = r.code;
+      } catch (err) { alert("Could not regenerate: " + err.message); }
+    }
   });
 
   // =========================================================================

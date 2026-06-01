@@ -145,6 +145,18 @@ table.data tfoot th { border-top: 2px solid var(--border); font-weight: 700; col
 .badge.pending { background: var(--amber-soft); color: var(--amber); }
 .badge.credited { background: var(--green-soft); color: var(--green); }
 .badge.declined { background: var(--red-soft); color: var(--red); }
+.badge.admin-badge { background: var(--bg); color: #fff; vertical-align: middle; margin-left: 6px; }
+
+code.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 13px;
+}
+input:disabled, select:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Toolbar */
 .toolbar {
