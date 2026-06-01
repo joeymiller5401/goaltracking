@@ -838,21 +838,29 @@
           .join("")
       : `<tr><td colspan="4" class="muted" style="text-align:center">No referrals in this period.</td></tr>`;
 
+    // Goals are branch-specific, so an admin must pick a branch before the
+    // goal list is meaningful. Branch users always see their own branch's goals.
     const dg = $("#dash-goals");
-    if (!goals.length) {
-      dg.innerHTML = `<p class="muted small">No goals set yet. Add one on the Goals tab.</p>`;
+    if (isAdmin() && branch === "all") {
+      dg.innerHTML = `<p class="muted small">Select a branch above to see its goals.</p>`;
     } else {
-      dg.innerHTML = goals
-        .slice(0, 5)
-        .map((g) => {
-          const { current, pct } = goalProgress(g);
-          const done = pct >= 100;
-          return `<div class="mini">
-            <h5>${esc(g.name)} <span>${esc(metricValue(g, current))} / ${esc(metricValue(g, g.target))}</span></h5>
-            <div class="progress ${done ? "done" : ""}"><span style="width:${pct}%"></span></div>
-          </div>`;
-        })
-        .join("");
+      const scopeBranch = isAdmin() ? branch : ((Api.currentUser() || {}).branch || "");
+      const list = goals.filter((g) => g.branch === scopeBranch);
+      if (!list.length) {
+        dg.innerHTML = `<p class="muted small">No goals for ${esc(scopeBranch)} yet. Add one on the Goals tab.</p>`;
+      } else {
+        dg.innerHTML = list
+          .slice(0, 5)
+          .map((g) => {
+            const { current, pct } = goalProgress(g);
+            const done = pct >= 100;
+            return `<div class="mini">
+              <h5>${esc(g.name)} <span>${esc(metricValue(g, current))} / ${esc(metricValue(g, g.target))}</span></h5>
+              <div class="progress ${done ? "done" : ""}"><span style="width:${pct}%"></span></div>
+            </div>`;
+          })
+          .join("");
+      }
     }
   }
   $("#dash-period").addEventListener("change", renderDashboard);
