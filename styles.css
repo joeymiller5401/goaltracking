@@ -21,6 +21,11 @@
 
 * { box-sizing: border-box; }
 
+/* The [hidden] attribute must always win, even over author display rules
+ * (e.g. .modal-backdrop{display:flex}, label{display:block}). Without this,
+ * elements meant to start hidden render on load. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
