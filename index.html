@@ -4,147 +4,199 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Referral Goal Tracker</title>
-  <meta name="description" content="Track investment referrals (initial &amp; additional funds) and employee credit goals." />
+  <meta name="description" content="Shared, encrypted tracker for investment referrals (initial &amp; additional funds) and employee credit goals." />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo">◆</span>
-      <div>
+  <!-- AUTH SCREEN -->
+  <div id="auth" class="auth-screen" hidden>
+    <div class="auth-card">
+      <div class="auth-brand">
+        <span class="logo">◆</span>
         <h1>Referral Goal Tracker</h1>
-        <p class="tagline">Track initial &amp; additional investment referrals and credit goals</p>
+        <p class="muted small">Sign in to access the shared, encrypted referral ledger.</p>
       </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth="login" type="button">Sign in</button>
+        <button class="auth-tab" data-auth="register" type="button">Create account</button>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <label>Email
+          <input type="email" id="login-email" autocomplete="username" required />
+        </label>
+        <label>Password
+          <input type="password" id="login-password" autocomplete="current-password" required />
+        </label>
+        <p class="auth-error" id="login-error" hidden></p>
+        <button class="btn primary wide" type="submit">Sign in</button>
+      </form>
+
+      <form id="register-form" class="auth-form" hidden>
+        <label>Name
+          <input type="text" id="reg-name" autocomplete="name" placeholder="Your name" />
+        </label>
+        <label>Email
+          <input type="email" id="reg-email" autocomplete="username" required />
+        </label>
+        <label>Password
+          <input type="password" id="reg-password" autocomplete="new-password" minlength="8" required />
+          <span class="hint">At least 8 characters.</span>
+        </label>
+        <label>Signup code
+          <input type="text" id="reg-code" required />
+          <span class="hint">Ask your administrator for the team signup code.</span>
+        </label>
+        <p class="auth-error" id="reg-error" hidden></p>
+        <button class="btn primary wide" type="submit">Create account</button>
+      </form>
     </div>
-    <nav class="tabs" id="tabs">
-      <button class="tab active" data-tab="dashboard">Dashboard</button>
-      <button class="tab" data-tab="referrals">Referrals</button>
-      <button class="tab" data-tab="goals">Goals</button>
-      <button class="tab" data-tab="settings">Settings</button>
-    </nav>
-  </header>
+  </div>
 
-  <main>
-    <!-- DASHBOARD -->
-    <section class="panel active" id="tab-dashboard">
-      <div class="panel-head">
-        <h2>Dashboard</h2>
-        <div class="filter-inline">
-          <label>Period
-            <select id="dash-period">
-              <option value="all">All time</option>
-              <option value="ytd">Year to date</option>
-              <option value="qtd">Quarter to date</option>
-              <option value="mtd">Month to date</option>
-            </select>
+  <!-- APP -->
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">◆</span>
+        <div>
+          <h1>Referral Goal Tracker</h1>
+          <p class="tagline">Track initial &amp; additional investment referrals and credit goals</p>
+        </div>
+        <div class="user-area">
+          <span class="user-name" id="user-name"></span>
+          <button class="btn small" id="logout-btn" type="button">Sign out</button>
+        </div>
+      </div>
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="dashboard">Dashboard</button>
+        <button class="tab" data-tab="referrals">Referrals</button>
+        <button class="tab" data-tab="goals">Goals</button>
+        <button class="tab" data-tab="settings">Settings</button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- DASHBOARD -->
+      <section class="panel active" id="tab-dashboard">
+        <div class="panel-head">
+          <h2>Dashboard</h2>
+          <div class="filter-inline">
+            <label>Period
+              <select id="dash-period">
+                <option value="all">All time</option>
+                <option value="ytd">Year to date</option>
+                <option value="qtd">Quarter to date</option>
+                <option value="mtd">Month to date</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="cards" id="summary-cards"></div>
+
+        <div class="grid-2">
+          <div class="card-block">
+            <h3>Credit by employee</h3>
+            <p class="muted small">Estimated credit using the rates in Settings. Excludes declined referrals.</p>
+            <table class="data" id="credit-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th class="num">Initial $</th>
+                  <th class="num">Additional $</th>
+                  <th class="num">Credit $</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="card-block">
+            <h3>Goal progress</h3>
+            <div id="dash-goals" class="goal-progress-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- REFERRALS -->
+      <section class="panel" id="tab-referrals">
+        <div class="panel-head">
+          <h2>Referrals</h2>
+          <button class="btn primary" id="add-referral-btn">+ New referral</button>
+        </div>
+
+        <div class="toolbar">
+          <input type="search" id="ref-search" placeholder="Search employee, client, branch…" />
+          <select id="ref-type-filter">
+            <option value="all">All types</option>
+            <option value="initial">Initial</option>
+            <option value="additional">Additional</option>
+          </select>
+          <select id="ref-status-filter">
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="credited">Credited</option>
+            <option value="declined">Declined</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn" id="export-btn">Export CSV</button>
+          <button class="btn" id="import-btn">Import CSV</button>
+          <input type="file" id="import-file" accept=".csv" hidden />
+        </div>
+
+        <table class="data" id="referrals-table">
+          <thead>
+            <tr>
+              <th data-sort="date">Date</th>
+              <th data-sort="employee">Employee</th>
+              <th data-sort="branch">Branch</th>
+              <th data-sort="client">Client</th>
+              <th data-sort="type">Type</th>
+              <th class="num" data-sort="amount">Amount</th>
+              <th data-sort="status">Status</th>
+              <th data-sort="owner">Added by</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="empty" id="referrals-empty" hidden>No referrals yet. Click “New referral” to add your first one.</p>
+      </section>
+
+      <!-- GOALS -->
+      <section class="panel" id="tab-goals">
+        <div class="panel-head">
+          <h2>Goals</h2>
+          <button class="btn primary" id="add-goal-btn">+ New goal</button>
+        </div>
+        <div id="goals-list" class="goals-list"></div>
+        <p class="empty" id="goals-empty" hidden>No goals yet. Set a target to start tracking progress.</p>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="panel" id="tab-settings">
+        <div class="panel-head"><h2>Settings</h2></div>
+        <div class="card-block narrow">
+          <h3>Credit rates</h3>
+          <p class="muted small">Initial and additional funds are credited differently. These rates drive the “Credit $” estimates on the dashboard and are shared across the team.</p>
+          <label>Initial funds credit rate (%)
+            <input type="number" id="rate-initial" step="0.01" min="0" />
           </label>
-        </div>
-      </div>
-
-      <div class="cards" id="summary-cards"></div>
-
-      <div class="grid-2">
-        <div class="card-block">
-          <h3>Credit by employee</h3>
-          <p class="muted small">Estimated credit using the rates in Settings. Counts referrals with a credited or pending status.</p>
-          <table class="data" id="credit-table">
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th class="num">Initial $</th>
-                <th class="num">Additional $</th>
-                <th class="num">Credit $</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+          <label>Additional funds credit rate (%)
+            <input type="number" id="rate-additional" step="0.01" min="0" />
+          </label>
+          <button class="btn primary" id="save-settings">Save</button>
+          <span class="save-note" id="settings-saved" hidden>Saved ✓</span>
         </div>
 
-        <div class="card-block">
-          <h3>Goal progress</h3>
-          <div id="dash-goals" class="goal-progress-list"></div>
+        <div class="card-block narrow">
+          <h3>Data</h3>
+          <p class="muted small">Referrals are stored encrypted in the shared database. Export a CSV anytime for your own backup or reporting.</p>
+          <button class="btn" id="export-btn-2">Export all data (CSV)</button>
         </div>
-      </div>
-    </section>
-
-    <!-- REFERRALS -->
-    <section class="panel" id="tab-referrals">
-      <div class="panel-head">
-        <h2>Referrals</h2>
-        <button class="btn primary" id="add-referral-btn">+ New referral</button>
-      </div>
-
-      <div class="toolbar">
-        <input type="search" id="ref-search" placeholder="Search employee, client, branch…" />
-        <select id="ref-type-filter">
-          <option value="all">All types</option>
-          <option value="initial">Initial</option>
-          <option value="additional">Additional</option>
-        </select>
-        <select id="ref-status-filter">
-          <option value="all">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="credited">Credited</option>
-          <option value="declined">Declined</option>
-        </select>
-        <div class="spacer"></div>
-        <button class="btn" id="export-btn">Export CSV</button>
-        <button class="btn" id="import-btn">Import CSV</button>
-        <input type="file" id="import-file" accept=".csv" hidden />
-      </div>
-
-      <table class="data" id="referrals-table">
-        <thead>
-          <tr>
-            <th data-sort="date">Date</th>
-            <th data-sort="employee">Employee</th>
-            <th data-sort="branch">Branch</th>
-            <th data-sort="client">Client</th>
-            <th data-sort="type">Type</th>
-            <th class="num" data-sort="amount">Amount</th>
-            <th data-sort="status">Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <p class="empty" id="referrals-empty" hidden>No referrals yet. Click “New referral” to add your first one.</p>
-    </section>
-
-    <!-- GOALS -->
-    <section class="panel" id="tab-goals">
-      <div class="panel-head">
-        <h2>Goals</h2>
-        <button class="btn primary" id="add-goal-btn">+ New goal</button>
-      </div>
-      <div id="goals-list" class="goals-list"></div>
-      <p class="empty" id="goals-empty" hidden>No goals yet. Set a target to start tracking progress.</p>
-    </section>
-
-    <!-- SETTINGS -->
-    <section class="panel" id="tab-settings">
-      <div class="panel-head"><h2>Settings</h2></div>
-      <div class="card-block narrow">
-        <h3>Credit rates</h3>
-        <p class="muted small">Initial and additional funds are credited differently. These rates drive the “Credit $” estimates on the dashboard.</p>
-        <label>Initial funds credit rate (%)
-          <input type="number" id="rate-initial" step="0.01" min="0" />
-        </label>
-        <label>Additional funds credit rate (%)
-          <input type="number" id="rate-additional" step="0.01" min="0" />
-        </label>
-        <button class="btn primary" id="save-settings">Save</button>
-        <span class="save-note" id="settings-saved" hidden>Saved ✓</span>
-      </div>
-
-      <div class="card-block narrow danger-zone">
-        <h3>Data</h3>
-        <p class="muted small">Your data is stored in this browser only. Export regularly to keep a backup.</p>
-        <button class="btn" id="export-btn-2">Export all data (CSV)</button>
-        <button class="btn danger" id="clear-data">Clear all data</button>
-      </div>
-    </section>
-  </main>
+      </section>
+    </main>
+  </div>
 
   <!-- Referral modal -->
   <div class="modal-backdrop" id="referral-modal" hidden>
@@ -187,6 +239,7 @@
         <label>Notes
           <textarea id="ref-notes" rows="2" placeholder="Optional"></textarea>
         </label>
+        <p class="auth-error" id="referral-error" hidden></p>
         <div class="modal-actions">
           <button type="button" class="btn" id="referral-cancel">Cancel</button>
           <button type="submit" class="btn primary">Save referral</button>
@@ -232,6 +285,7 @@
             <input type="date" id="goal-end" />
           </label>
         </div>
+        <p class="auth-error" id="goal-error" hidden></p>
         <div class="modal-actions">
           <button type="button" class="btn" id="goal-cancel">Cancel</button>
           <button type="submit" class="btn primary">Save goal</button>
@@ -240,6 +294,7 @@
     </div>
   </div>
 
+  <script src="api.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

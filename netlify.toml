@@ -1,15 +1,27 @@
 # Netlify configuration for the Referral Goal Tracker.
-# This is a static, build-free site: the files in the repo root ARE the site.
+# Static front end (repo root) + serverless API in netlify/functions.
 
 [build]
   publish = "."
-  # No build step needed — plain HTML/CSS/JS.
   command = ""
 
-# Security headers (sensible defaults for an internal tool).
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Friendly API paths: /api/referrals -> /.netlify/functions/referrals
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Security headers. Responses may carry decrypted PII, so disallow framing,
+# sniffing, and restrict what the page can load/connect to.
 [[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"
+    Permissions-Policy = "geolocation=(), camera=(), microphone=()"
+    Content-Security-Policy = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"

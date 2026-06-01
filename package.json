@@ -1,0 +1,9 @@
+{
+  "name": "referral-goal-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared, encrypted referral & goal tracker for the asset-management team",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

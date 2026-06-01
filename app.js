@@ -1,64 +1,35 @@
-/* Referral Goal Tracker
- * A client-side app for tracking investment referrals (initial & additional
- * funds) and crediting goals. Data persists in localStorage. No backend.
+/* Referral Goal Tracker — front-end.
+ * Talks to the encrypted, multi-user backend via window.Api. Data is loaded
+ * into memory after sign-in and kept in sync as the user makes changes.
  */
 (function () {
   "use strict";
 
-  // ---- Storage -------------------------------------------------------------
-  const KEYS = {
-    referrals: "rgt.referrals",
-    goals: "rgt.goals",
-    settings: "rgt.settings",
-  };
+  // ---- In-memory state (mirrors the server) --------------------------------
+  let referrals = [];
+  let goals = [];
+  let settings = { rateInitial: 1.0, rateAdditional: 0.5 };
 
-  const DEFAULT_SETTINGS = { rateInitial: 1.0, rateAdditional: 0.5 };
-
-  function load(key, fallback) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch (e) {
-      console.error("Failed to read " + key, e);
-      return fallback;
-    }
-  }
-  function save(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
-  }
-
-  let referrals = load(KEYS.referrals, []);
-  let goals = load(KEYS.goals, []);
-  let settings = Object.assign({}, DEFAULT_SETTINGS, load(KEYS.settings, {}));
-
-  function persistReferrals() { save(KEYS.referrals, referrals); }
-  function persistGoals() { save(KEYS.goals, goals); }
-  function persistSettings() { save(KEYS.settings, settings); }
-
-  // ---- Helpers -------------------------------------------------------------
+  // ---- DOM helpers ---------------------------------------------------------
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
 
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-
   const fmtMoney = (n) =>
     "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtMoney0 = (n) =>
-    "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
+  const fmtMoney0 = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
   const fmtDate = (iso) => {
     if (!iso) return "";
     const d = new Date(iso + "T00:00:00");
     return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
   };
   const todayISO = () => new Date().toISOString().slice(0, 10);
-
   const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
   const esc = (s) =>
     String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
     );
 
-  // Period filter for the dashboard
+  // ---- Period helpers (dashboard) ------------------------------------------
   function periodStart(period) {
     const now = new Date();
     if (period === "ytd") return new Date(now.getFullYear(), 0, 1);
@@ -67,7 +38,7 @@
       const q = Math.floor(now.getMonth() / 3) * 3;
       return new Date(now.getFullYear(), q, 1);
     }
-    return null; // all time
+    return null;
   }
   function inPeriod(ref, period) {
     const start = periodStart(period);
@@ -75,7 +46,104 @@
     return new Date(ref.date + "T00:00:00") >= start;
   }
 
-  // ---- Tabs ----------------------------------------------------------------
+  // =========================================================================
+  //  AUTH
+  // =========================================================================
+  const authScreen = $("#auth");
+  const appRoot = $("#app");
+
+  function showAuth() {
+    appRoot.hidden = true;
+    authScreen.hidden = false;
+  }
+  function showApp() {
+    authScreen.hidden = true;
+    appRoot.hidden = false;
+    const u = Api.currentUser();
+    $("#user-name").textContent = u ? (u.name || u.email) : "";
+  }
+
+  Api.onUnauthorized = () => {
+    referrals = []; goals = [];
+    showAuth();
+  };
+
+  // Switch between sign-in / register
+  $$(".auth-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const which = btn.dataset.auth;
+      $$(".auth-tab").forEach((b) => b.classList.toggle("active", b === btn));
+      $("#login-form").hidden = which !== "login";
+      $("#register-form").hidden = which !== "register";
+      $("#login-error").hidden = true;
+      $("#reg-error").hidden = true;
+    });
+  });
+
+  function showErr(el, msg) { el.textContent = msg; el.hidden = false; }
+
+  $("#login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("#login-error").hidden = true;
+    try {
+      await Api.login({
+        email: $("#login-email").value.trim(),
+        password: $("#login-password").value,
+      });
+      showApp();
+      await loadAll();
+    } catch (err) {
+      showErr($("#login-error"), err.message);
+    }
+  });
+
+  $("#register-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("#reg-error").hidden = true;
+    try {
+      await Api.register({
+        name: $("#reg-name").value.trim(),
+        email: $("#reg-email").value.trim(),
+        password: $("#reg-password").value,
+        code: $("#reg-code").value.trim(),
+      });
+      showApp();
+      await loadAll();
+    } catch (err) {
+      showErr($("#reg-error"), err.message);
+    }
+  });
+
+  $("#logout-btn").addEventListener("click", () => {
+    Api.logout();
+    referrals = []; goals = [];
+    showAuth();
+  });
+
+  // ---- Load everything after sign-in --------------------------------------
+  async function loadAll() {
+    try {
+      const [refs, gls, st] = await Promise.all([
+        Api.listReferrals(),
+        Api.listGoals(),
+        Api.getSettings(),
+      ]);
+      referrals = refs;
+      goals = gls;
+      settings = st;
+      loadSettingsForm();
+      renderReferrals();
+      renderGoals();
+      renderDashboard();
+    } catch (err) {
+      // 401s are handled by onUnauthorized; surface anything else.
+      if (!/authenticated/i.test(err.message)) alert("Failed to load data: " + err.message);
+    }
+  }
+
+  // =========================================================================
+  //  TABS
+  // =========================================================================
   $("#tabs").addEventListener("click", (e) => {
     const btn = e.target.closest(".tab");
     if (!btn) return;
@@ -85,7 +153,7 @@
     if (tab === "dashboard") renderDashboard();
   });
 
-  // ---- Datalists (employee / branch suggestions) ---------------------------
+  // ---- Datalists -----------------------------------------------------------
   function refreshDatalists() {
     const employees = [...new Set(referrals.map((r) => r.employee).filter(Boolean))].sort();
     const branches = [...new Set(referrals.map((r) => r.branch).filter(Boolean))].sort();
@@ -93,7 +161,9 @@
     $("#branch-list").innerHTML = branches.map((b) => `<option value="${esc(b)}">`).join("");
   }
 
-  // ---- Referrals table -----------------------------------------------------
+  // =========================================================================
+  //  REFERRALS
+  // =========================================================================
   const refState = { search: "", type: "all", status: "all", sortKey: "date", sortDir: -1 };
 
   function filteredReferrals() {
@@ -128,14 +198,15 @@
     tbody.innerHTML = rows
       .map(
         (r) => `
-      <tr data-id="${r.id}">
+      <tr data-id="${esc(r.id)}">
         <td>${esc(fmtDate(r.date))}</td>
         <td>${esc(r.employee)}</td>
         <td>${esc(r.branch || "")}</td>
         <td>${esc(r.client)}</td>
-        <td><span class="badge ${r.type}">${capitalize(r.type)}</span></td>
+        <td><span class="badge ${esc(r.type)}">${capitalize(r.type)}</span></td>
         <td class="num">${esc(fmtMoney(r.amount))}</td>
-        <td><span class="badge ${r.status}">${capitalize(r.status)}</span></td>
+        <td><span class="badge ${esc(r.status)}">${capitalize(r.status)}</span></td>
+        <td class="muted small">${esc(r.owner || "")}</td>
         <td class="row-actions">
           <button class="link-btn" data-act="edit">Edit</button>
           <button class="link-btn del" data-act="delete">Delete</button>
@@ -146,7 +217,6 @@
     refreshDatalists();
   }
 
-  // Sorting
   $$("#referrals-table thead th[data-sort]").forEach((th) => {
     th.addEventListener("click", () => {
       const key = th.dataset.sort;
@@ -160,19 +230,20 @@
   $("#ref-type-filter").addEventListener("change", (e) => { refState.type = e.target.value; renderReferrals(); });
   $("#ref-status-filter").addEventListener("change", (e) => { refState.status = e.target.value; renderReferrals(); });
 
-  // Row actions
-  $("#referrals-table tbody").addEventListener("click", (e) => {
+  $("#referrals-table tbody").addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
     const id = e.target.closest("tr").dataset.id;
     if (btn.dataset.act === "edit") openReferralModal(id);
     else if (btn.dataset.act === "delete") {
       const r = referrals.find((x) => x.id === id);
-      if (confirm(`Delete referral for ${r ? r.client : "this client"}?`)) {
+      if (!confirm(`Delete referral for ${r ? r.client : "this client"}?`)) return;
+      try {
+        await Api.deleteReferral(id);
         referrals = referrals.filter((x) => x.id !== id);
-        persistReferrals();
         renderReferrals();
-      }
+        renderDashboard();
+      } catch (err) { alert("Delete failed: " + err.message); }
     }
   });
 
@@ -181,6 +252,7 @@
 
   function openReferralModal(id) {
     const editing = referrals.find((r) => r.id === id);
+    $("#referral-error").hidden = true;
     $("#referral-modal-title").textContent = editing ? "Edit referral" : "New referral";
     $("#ref-id").value = editing ? editing.id : "";
     $("#ref-date").value = editing ? editing.date : todayISO();
@@ -200,8 +272,9 @@
   $("#referral-cancel").addEventListener("click", closeReferralModal);
   refModal.addEventListener("click", (e) => { if (e.target === refModal) closeReferralModal(); });
 
-  $("#referral-form").addEventListener("submit", (e) => {
+  $("#referral-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    $("#referral-error").hidden = true;
     const id = $("#ref-id").value;
     const data = {
       date: $("#ref-date").value,
@@ -213,18 +286,26 @@
       status: $("#ref-status").value,
       notes: $("#ref-notes").value.trim(),
     };
-    if (id) {
-      const r = referrals.find((x) => x.id === id);
-      Object.assign(r, data);
-    } else {
-      referrals.push(Object.assign({ id: uid() }, data));
+    try {
+      if (id) {
+        const updated = await Api.updateReferral(id, data);
+        const i = referrals.findIndex((x) => x.id === id);
+        if (i >= 0) referrals[i] = updated;
+      } else {
+        const created = await Api.createReferral(data);
+        referrals.unshift(created);
+      }
+      renderReferrals();
+      renderDashboard();
+      closeReferralModal();
+    } catch (err) {
+      showErr($("#referral-error"), err.message);
     }
-    persistReferrals();
-    renderReferrals();
-    closeReferralModal();
   });
 
-  // ---- Goals ---------------------------------------------------------------
+  // =========================================================================
+  //  GOALS
+  // =========================================================================
   function goalMatches(goal, ref) {
     if (goal.start && ref.date < goal.start) return false;
     if (goal.end && ref.date > goal.end) return false;
@@ -232,9 +313,8 @@
     if (goal.scope === "additional") return ref.type === "additional";
     if (goal.scope === "employee")
       return (ref.employee || "").toLowerCase() === (goal.employee || "").toLowerCase();
-    return true; // all
+    return true;
   }
-
   function goalProgress(goal) {
     const matched = referrals.filter((r) => r.status !== "declined" && goalMatches(goal, r));
     const current = goal.metric === "count"
@@ -243,7 +323,6 @@
     const pct = goal.target > 0 ? Math.min(100, (current / goal.target) * 100) : 0;
     return { current, pct };
   }
-
   function scopeLabel(goal) {
     if (goal.scope === "initial") return "Initial funds";
     if (goal.scope === "additional") return "Additional funds";
@@ -264,7 +343,7 @@
         const range = [g.start ? fmtDate(g.start) : null, g.end ? fmtDate(g.end) : null]
           .filter(Boolean).join(" – ");
         return `
-        <div class="goal-card" data-id="${g.id}">
+        <div class="goal-card" data-id="${esc(g.id)}">
           <div class="goal-top">
             <div>
               <h4>${esc(g.name)}</h4>
@@ -285,23 +364,24 @@
       .join("");
   }
 
-  $("#goals-list").addEventListener("click", (e) => {
+  $("#goals-list").addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
     const id = e.target.closest(".goal-card").dataset.id;
     if (btn.dataset.act === "edit-goal") openGoalModal(id);
     else if (btn.dataset.act === "del-goal") {
-      if (confirm("Delete this goal?")) {
+      if (!confirm("Delete this goal?")) return;
+      try {
+        await Api.deleteGoal(id);
         goals = goals.filter((g) => g.id !== id);
-        persistGoals();
         renderGoals();
-      }
+        renderDashboard();
+      } catch (err) { alert("Delete failed: " + err.message); }
     }
   });
 
   // ---- Goal modal ----------------------------------------------------------
   const goalModal = $("#goal-modal");
-
   function toggleGoalEmployee() {
     $("#goal-employee-wrap").hidden = $("#goal-scope").value !== "employee";
   }
@@ -309,6 +389,7 @@
 
   function openGoalModal(id) {
     const editing = goals.find((g) => g.id === id);
+    $("#goal-error").hidden = true;
     $("#goal-modal-title").textContent = editing ? "Edit goal" : "New goal";
     $("#goal-id").value = editing ? editing.id : "";
     $("#goal-name").value = editing ? editing.name : "";
@@ -328,8 +409,9 @@
   $("#goal-cancel").addEventListener("click", closeGoalModal);
   goalModal.addEventListener("click", (e) => { if (e.target === goalModal) closeGoalModal(); });
 
-  $("#goal-form").addEventListener("submit", (e) => {
+  $("#goal-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    $("#goal-error").hidden = true;
     const id = $("#goal-id").value;
     const data = {
       name: $("#goal-name").value.trim(),
@@ -340,18 +422,26 @@
       start: $("#goal-start").value || "",
       end: $("#goal-end").value || "",
     };
-    if (id) {
-      const g = goals.find((x) => x.id === id);
-      Object.assign(g, data);
-    } else {
-      goals.push(Object.assign({ id: uid() }, data));
+    try {
+      if (id) {
+        const updated = await Api.updateGoal(id, data);
+        const i = goals.findIndex((x) => x.id === id);
+        if (i >= 0) goals[i] = updated;
+      } else {
+        const created = await Api.createGoal(data);
+        goals.push(created);
+      }
+      renderGoals();
+      renderDashboard();
+      closeGoalModal();
+    } catch (err) {
+      showErr($("#goal-error"), err.message);
     }
-    persistGoals();
-    renderGoals();
-    closeGoalModal();
   });
 
-  // ---- Dashboard -----------------------------------------------------------
+  // =========================================================================
+  //  DASHBOARD
+  // =========================================================================
   function creditFor(ref) {
     const rate = ref.type === "initial" ? settings.rateInitial : settings.rateAdditional;
     return (Number(ref.amount) || 0) * (Number(rate) || 0) / 100;
@@ -379,25 +469,23 @@
     $("#summary-cards").innerHTML = cards
       .map(
         (c) => `<div class="metric ${c.cls}">
-          <div class="label">${c.label}</div>
-          <div class="value">${c.value}</div>
-          <div class="sub">${c.sub}</div>
+          <div class="label">${esc(c.label)}</div>
+          <div class="value">${esc(c.value)}</div>
+          <div class="sub">${esc(c.sub)}</div>
         </div>`
       )
       .join("");
 
-    // Credit by employee
     const byEmp = {};
     active.forEach((r) => {
-      const key = r.employee || "(unassigned)";
-      const e = byEmp[key] || (byEmp[key] = { initial: 0, additional: 0, credit: 0 });
+      const k = r.employee || "(unassigned)";
+      const e = byEmp[k] || (byEmp[k] = { initial: 0, additional: 0, credit: 0 });
       if (r.type === "initial") e.initial += Number(r.amount) || 0;
       else e.additional += Number(r.amount) || 0;
       e.credit += creditFor(r);
     });
     const empRows = Object.entries(byEmp).sort((a, b) => b[1].credit - a[1].credit);
-    const ctbody = $("#credit-table tbody");
-    ctbody.innerHTML = empRows.length
+    $("#credit-table tbody").innerHTML = empRows.length
       ? empRows
           .map(
             ([name, v]) => `<tr>
@@ -410,7 +498,6 @@
           .join("")
       : `<tr><td colspan="4" class="muted" style="text-align:center">No referrals in this period.</td></tr>`;
 
-    // Goal progress (top 5)
     const dg = $("#dash-goals");
     if (!goals.length) {
       dg.innerHTML = `<p class="muted small">No goals set yet. Add one on the Goals tab.</p>`;
@@ -430,31 +517,29 @@
   }
   $("#dash-period").addEventListener("change", renderDashboard);
 
-  // ---- Settings ------------------------------------------------------------
+  // =========================================================================
+  //  SETTINGS
+  // =========================================================================
   function loadSettingsForm() {
     $("#rate-initial").value = settings.rateInitial;
     $("#rate-additional").value = settings.rateAdditional;
   }
-  $("#save-settings").addEventListener("click", () => {
-    settings.rateInitial = parseFloat($("#rate-initial").value) || 0;
-    settings.rateAdditional = parseFloat($("#rate-additional").value) || 0;
-    persistSettings();
-    const note = $("#settings-saved");
-    note.hidden = false;
-    setTimeout(() => (note.hidden = true), 1800);
-    renderDashboard();
+  $("#save-settings").addEventListener("click", async () => {
+    try {
+      settings = await Api.saveSettings({
+        rateInitial: parseFloat($("#rate-initial").value) || 0,
+        rateAdditional: parseFloat($("#rate-additional").value) || 0,
+      });
+      const note = $("#settings-saved");
+      note.hidden = false;
+      setTimeout(() => (note.hidden = true), 1800);
+      renderDashboard();
+    } catch (err) { alert("Could not save settings: " + err.message); }
   });
 
-  $("#clear-data").addEventListener("click", () => {
-    if (!confirm("This permanently deletes all referrals, goals and settings in this browser. Continue?")) return;
-    referrals = []; goals = [];
-    settings = Object.assign({}, DEFAULT_SETTINGS);
-    persistReferrals(); persistGoals(); persistSettings();
-    loadSettingsForm();
-    renderReferrals(); renderGoals(); renderDashboard();
-  });
-
-  // ---- CSV export / import -------------------------------------------------
+  // =========================================================================
+  //  CSV export / import
+  // =========================================================================
   const CSV_COLS = ["date", "type", "employee", "branch", "client", "amount", "status", "notes"];
 
   function csvCell(v) {
@@ -472,7 +557,6 @@
     URL.revokeObjectURL(a.href);
   }
 
-  // Minimal CSV parser supporting quoted fields
   function parseCSV(text) {
     const rows = [];
     let row = [], field = "", inQuotes = false;
@@ -496,7 +580,7 @@
     return rows;
   }
 
-  function importCSV(text) {
+  async function importCSV(text) {
     const rows = parseCSV(text);
     if (!rows.length) return;
     const header = rows[0].map((h) => h.trim().toLowerCase());
@@ -506,30 +590,37 @@
       alert("CSV must include at least 'client' and 'amount' columns. Expected headers: " + CSV_COLS.join(", "));
       return;
     }
-    let added = 0;
+    const toCreate = [];
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
       const get = (c) => (idx[c] >= 0 ? (r[idx[c]] || "").trim() : "");
-      const type = get("type").toLowerCase() === "additional" ? "additional" : "initial";
-      let status = get("status").toLowerCase();
-      if (!["pending", "credited", "declined"].includes(status)) status = "pending";
-      referrals.push({
-        id: uid(),
+      if (!get("client") && !get("employee")) continue;
+      toCreate.push({
         date: get("date") || todayISO(),
-        type,
+        type: get("type").toLowerCase() === "additional" ? "additional" : "initial",
         employee: get("employee"),
         branch: get("branch"),
         client: get("client"),
         amount: parseFloat(get("amount")) || 0,
-        status,
+        status: ["pending", "credited", "declined"].includes(get("status").toLowerCase())
+          ? get("status").toLowerCase() : "pending",
         notes: get("notes"),
       });
-      added++;
     }
-    persistReferrals();
+    if (!toCreate.length) { alert("No rows to import."); return; }
+    if (!confirm(`Import ${toCreate.length} referral${toCreate.length === 1 ? "" : "s"} into the shared database?`)) return;
+
+    let added = 0, failed = 0;
+    for (const rec of toCreate) {
+      try {
+        const created = await Api.createReferral(rec);
+        referrals.unshift(created);
+        added++;
+      } catch (err) { failed++; }
+    }
     renderReferrals();
     renderDashboard();
-    alert("Imported " + added + " referral" + (added === 1 ? "" : "s") + ".");
+    alert(`Imported ${added} referral${added === 1 ? "" : "s"}.` + (failed ? ` ${failed} failed.` : ""));
   }
 
   $("#export-btn").addEventListener("click", exportCSV);
@@ -544,26 +635,23 @@
     e.target.value = "";
   });
 
-  // Close modals on Escape
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { closeReferralModal(); closeGoalModal(); }
   });
 
-  // ---- Seed sample data on first run --------------------------------------
-  function seedIfEmpty() {
-    if (load(KEYS.referrals, null) !== null) return; // user already has (possibly empty) data
-    referrals = [
-      { id: uid(), date: todayISO(), type: "initial", employee: "Jordan Lee", branch: "Downtown", client: "Acme Holdings", amount: 250000, status: "credited", notes: "New brokerage relationship" },
-      { id: uid(), date: todayISO(), type: "additional", employee: "Jordan Lee", branch: "Downtown", client: "Acme Holdings", amount: 75000, status: "pending", notes: "Top-up to existing account" },
-      { id: uid(), date: todayISO(), type: "initial", employee: "Priya Shah", branch: "Westside", client: "R. Mathers IRA", amount: 120000, status: "pending", notes: "" },
-    ];
-    persistReferrals();
+  // =========================================================================
+  //  INIT
+  // =========================================================================
+  async function init() {
+    if (Api.hasToken()) {
+      try {
+        await Api.me();   // validate the stored token
+        showApp();
+        await loadAll();
+        return;
+      } catch (e) { /* fall through to auth */ }
+    }
+    showAuth();
   }
-
-  // ---- Init ----------------------------------------------------------------
-  seedIfEmpty();
-  loadSettingsForm();
-  renderReferrals();
-  renderGoals();
-  renderDashboard();
+  init();
 })();
