@@ -7,8 +7,14 @@ const { neon } = require("@neondatabase/serverless");
 let _sql = null;
 function sql() {
   if (!_sql) {
-    if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
-    _sql = neon(process.env.DATABASE_URL);
+    // DATABASE_URL if supplied directly; otherwise the variables set by
+    // Netlify's built-in Neon database extension.
+    const url =
+      process.env.DATABASE_URL ||
+      process.env.NETLIFY_DATABASE_URL ||
+      process.env.NETLIFY_DATABASE_URL_UNPOOLED;
+    if (!url) throw new Error("No database URL set (DATABASE_URL or NETLIFY_DATABASE_URL)");
+    _sql = neon(url);
   }
   return _sql;
 }
