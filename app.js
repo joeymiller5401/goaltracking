@@ -684,6 +684,59 @@
     return (Number(ref.amount) || 0) * (Number(rate) || 0) / 100;
   }
 
+  // Stacked monthly bar chart (Initial vs Additional), last 12 months in range.
+  function monthlyChartSVG(rows) {
+    const byMonth = {};
+    rows.forEach((r) => {
+      if (!/^\d{4}-\d{2}/.test(r.date || "")) return;
+      const m = r.date.slice(0, 7);
+      const e = byMonth[m] || (byMonth[m] = { initial: 0, additional: 0 });
+      if (r.type === "initial") e.initial += Number(r.amount) || 0;
+      else e.additional += Number(r.amount) || 0;
+    });
+    const present = Object.keys(byMonth).sort();
+    if (!present.length) return `<p class="muted small">No referrals to chart for this selection.</p>`;
+
+    // Fill the continuous month range, then keep the most recent 12.
+    const months = [];
+    let [sy, sm] = present[0].split("-").map(Number);
+    const [ey, em] = present[present.length - 1].split("-").map(Number);
+    while (sy < ey || (sy === ey && sm <= em)) {
+      months.push(`${sy}-${String(sm).padStart(2, "0")}`);
+      sm++; if (sm > 12) { sm = 1; sy++; }
+    }
+    const data = months.slice(-12).map((m) => ({ m, initial: (byMonth[m] || {}).initial || 0, additional: (byMonth[m] || {}).additional || 0 }));
+    const yMax = Math.max(1, ...data.map((d) => d.initial + d.additional));
+
+    const W = 680, padL = 60, padR = 14, padT = 14, padB = 40, innerH = 160;
+    const innerW = W - padL - padR, H = padT + innerH + padB, sy0 = padT + innerH;
+    const slot = innerW / data.length, bw = Math.min(46, slot * 0.6);
+    const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const label = (m, i) => {
+      const [y, mm] = m.split("-").map(Number);
+      return (mm === 1 || i === 0) ? names[mm - 1] + " '" + String(y).slice(2) : names[mm - 1];
+    };
+
+    let bars = "";
+    data.forEach((d, i) => {
+      const cx = padL + slot * i + slot / 2, x = cx - bw / 2;
+      const hi = (d.initial / yMax) * innerH, ha = (d.additional / yMax) * innerH;
+      const yi = sy0 - hi, ya = yi - ha;
+      const tip = `${label(d.m, i)} — Initial ${fmtMoney0(d.initial)}, Additional ${fmtMoney0(d.additional)}, Total ${fmtMoney0(d.initial + d.additional)}`;
+      bars += `<g><title>${esc(tip)}</title>`;
+      if (d.initial > 0) bars += `<rect x="${x.toFixed(1)}" y="${yi.toFixed(1)}" width="${bw.toFixed(1)}" height="${hi.toFixed(1)}" fill="#1d4ed8" rx="2"/>`;
+      if (d.additional > 0) bars += `<rect x="${x.toFixed(1)}" y="${ya.toFixed(1)}" width="${bw.toFixed(1)}" height="${ha.toFixed(1)}" fill="#15803d" rx="2"/>`;
+      bars += `<text x="${cx.toFixed(1)}" y="${H - 20}" text-anchor="middle" class="chart-axis">${esc(label(d.m, i))}</text></g>`;
+    });
+
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" class="chart" preserveAspectRatio="xMidYMid meet">
+      <line x1="${padL}" y1="${sy0}" x2="${W - padR}" y2="${sy0}" stroke="#e2e8f0"/>
+      <text x="${padL - 8}" y="${sy0}" text-anchor="end" dominant-baseline="middle" class="chart-axis">0</text>
+      <text x="${padL - 8}" y="${padT + 6}" text-anchor="end" class="chart-axis">${esc(fmtMoney0(yMax))}</text>
+      ${bars}
+    </svg>`;
+  }
+
   function renderDashboard() {
     const period = $("#dash-period").value;
     const branch = $("#dash-branch").value;
@@ -715,6 +768,8 @@
         </div>`
       )
       .join("");
+
+    $("#monthly-chart").innerHTML = monthlyChartSVG(active);
 
     // Per-branch breakdown — all branches, period only (ignores the branch filter).
     const periodActive = referrals.filter((r) => inPeriod(r, period) && r.status !== "declined");
