@@ -5,6 +5,13 @@
 (function () {
   "use strict";
 
+  // ---- Branches ------------------------------------------------------------
+  // The bank's branch list. Referrals and (optionally) goals are scoped to one.
+  const BRANCHES = [
+    "Rhinebeck", "Red Hook", "Hyde Park", "South Rd", "Mid Hudson", "Kingston",
+    "East Fishkill", "Arlington", "Fishkill", "Goshen", "Warwick", "Newburgh",
+  ];
+
   // ---- In-memory state (mirrors the server) --------------------------------
   let referrals = [];
   let goals = [];
@@ -153,12 +160,16 @@
     if (tab === "dashboard") renderDashboard();
   });
 
-  // ---- Datalists -----------------------------------------------------------
+  // ---- Branch & employee option lists --------------------------------------
+  function populateBranchSelects() {
+    const opts = BRANCHES.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
+    $("#ref-branch").innerHTML = `<option value="">Select branch…</option>` + opts;
+    $("#goal-branch").innerHTML = opts;
+    $("#dash-branch").innerHTML = `<option value="all">All branches</option>` + opts;
+  }
   function refreshDatalists() {
     const employees = [...new Set(referrals.map((r) => r.employee).filter(Boolean))].sort();
-    const branches = [...new Set(referrals.map((r) => r.branch).filter(Boolean))].sort();
     $("#employee-list").innerHTML = employees.map((e) => `<option value="${esc(e)}">`).join("");
-    $("#branch-list").innerHTML = branches.map((b) => `<option value="${esc(b)}">`).join("");
   }
 
   // =========================================================================
@@ -311,6 +322,8 @@
     if (goal.end && ref.date > goal.end) return false;
     if (goal.scope === "initial") return ref.type === "initial";
     if (goal.scope === "additional") return ref.type === "additional";
+    if (goal.scope === "branch")
+      return (ref.branch || "").toLowerCase() === (goal.branch || "").toLowerCase();
     if (goal.scope === "employee")
       return (ref.employee || "").toLowerCase() === (goal.employee || "").toLowerCase();
     return true;
@@ -326,6 +339,7 @@
   function scopeLabel(goal) {
     if (goal.scope === "initial") return "Initial funds";
     if (goal.scope === "additional") return "Additional funds";
+    if (goal.scope === "branch") return goal.branch || "Branch";
     if (goal.scope === "employee") return goal.employee || "Employee";
     return "All referrals";
   }
@@ -382,10 +396,12 @@
 
   // ---- Goal modal ----------------------------------------------------------
   const goalModal = $("#goal-modal");
-  function toggleGoalEmployee() {
-    $("#goal-employee-wrap").hidden = $("#goal-scope").value !== "employee";
+  function toggleGoalScopeFields() {
+    const scope = $("#goal-scope").value;
+    $("#goal-employee-wrap").hidden = scope !== "employee";
+    $("#goal-branch-wrap").hidden = scope !== "branch";
   }
-  $("#goal-scope").addEventListener("change", toggleGoalEmployee);
+  $("#goal-scope").addEventListener("change", toggleGoalScopeFields);
 
   function openGoalModal(id) {
     const editing = goals.find((g) => g.id === id);
@@ -396,10 +412,11 @@
     $("#goal-metric").value = editing ? editing.metric : "amount";
     $("#goal-scope").value = editing ? editing.scope : "all";
     $("#goal-employee").value = editing ? editing.employee || "" : "";
+    $("#goal-branch").value = editing ? editing.branch || "" : "";
     $("#goal-target").value = editing ? editing.target : "";
     $("#goal-start").value = editing ? editing.start || "" : "";
     $("#goal-end").value = editing ? editing.end || "" : "";
-    toggleGoalEmployee();
+    toggleGoalScopeFields();
     goalModal.hidden = false;
     $("#goal-name").focus();
   }
@@ -418,6 +435,7 @@
       metric: $("#goal-metric").value,
       scope: $("#goal-scope").value,
       employee: $("#goal-employee").value.trim(),
+      branch: $("#goal-branch").value,
       target: parseFloat($("#goal-target").value) || 0,
       start: $("#goal-start").value || "",
       end: $("#goal-end").value || "",
@@ -449,7 +467,9 @@
 
   function renderDashboard() {
     const period = $("#dash-period").value;
-    const rows = referrals.filter((r) => inPeriod(r, period));
+    const branch = $("#dash-branch").value;
+    let rows = referrals.filter((r) => inPeriod(r, period));
+    if (branch !== "all") rows = rows.filter((r) => (r.branch || "") === branch);
     const active = rows.filter((r) => r.status !== "declined");
 
     const initial = active.filter((r) => r.type === "initial");
@@ -517,6 +537,7 @@
     }
   }
   $("#dash-period").addEventListener("change", renderDashboard);
+  $("#dash-branch").addEventListener("change", renderDashboard);
 
   // =========================================================================
   //  SETTINGS
@@ -644,6 +665,7 @@
   //  INIT
   // =========================================================================
   async function init() {
+    populateBranchSelects();
     if (Api.hasToken()) {
       try {
         await Api.me();   // validate the stored token

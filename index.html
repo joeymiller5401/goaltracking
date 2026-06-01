@@ -81,6 +81,11 @@
         <div class="panel-head">
           <h2>Dashboard</h2>
           <div class="filter-inline">
+            <label>Branch
+              <select id="dash-branch">
+                <option value="all">All branches</option>
+              </select>
+            </label>
             <label>Period
               <select id="dash-period">
                 <option value="all">All time</option>
@@ -219,8 +224,9 @@
             <datalist id="employee-list"></datalist>
           </label>
           <label>Branch
-            <input type="text" id="ref-branch" list="branch-list" placeholder="Optional" />
-            <datalist id="branch-list"></datalist>
+            <select id="ref-branch" required>
+              <option value="">Select branch…</option>
+            </select>
           </label>
           <label>Client
             <input type="text" id="ref-client" required placeholder="Referred client" />
@@ -269,8 +275,12 @@
               <option value="all">All referrals</option>
               <option value="initial">Initial only</option>
               <option value="additional">Additional only</option>
+              <option value="branch">Specific branch</option>
               <option value="employee">Specific employee</option>
             </select>
+          </label>
+          <label id="goal-branch-wrap" hidden>Branch
+            <select id="goal-branch"></select>
           </label>
           <label id="goal-employee-wrap" hidden>Employee
             <input type="text" id="goal-employee" list="employee-list" placeholder="Employee name" />

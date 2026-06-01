@@ -20,6 +20,7 @@ function rowToGoal(r) {
     id: r.id,
     name: d.name || "",
     employee: d.employee || "",
+    branch: d.branch || "",
     metric: r.metric,
     scope: r.scope,
     target: Number(r.target) || 0,
@@ -31,7 +32,7 @@ function rowToGoal(r) {
 function validate(b) {
   if (!String(b.name || "").trim()) return { error: "Goal name is required" };
   const metric = b.metric === "count" ? "count" : "amount";
-  const scope = ["all", "initial", "additional", "employee"].includes(b.scope) ? b.scope : "all";
+  const scope = ["all", "initial", "additional", "employee", "branch"].includes(b.scope) ? b.scope : "all";
   const target = Number(b.target);
   if (!(target >= 0)) return { error: "A valid target is required" };
   const start = b.start ? String(b.start).slice(0, 10) : null;
@@ -59,7 +60,7 @@ exports.handler = async (event) => {
       try { b = JSON.parse(event.body || "{}"); } catch (e) { return json(400, { error: "Invalid JSON" }); }
       const v = validate(b);
       if (v.error) return json(400, { error: v.error });
-      const enc = JSON.stringify(encrypt({ name: b.name, employee: b.employee || "" }));
+      const enc = JSON.stringify(encrypt({ name: b.name, employee: b.employee || "", branch: b.branch || "" }));
 
       if (method === "POST") {
         const ins = await q`
