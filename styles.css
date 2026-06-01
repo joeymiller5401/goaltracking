@@ -131,6 +131,7 @@ table.data thead th {
 table.data thead th[data-sort]:hover { color: var(--text); }
 table.data .num { text-align: right; }
 table.data tbody tr:hover { background: var(--surface-2); }
+table.data tfoot th { border-top: 2px solid var(--border); font-weight: 700; color: var(--text); text-transform: none; font-size: 13px; }
 
 .badge {
   display: inline-block;

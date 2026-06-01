@@ -164,7 +164,7 @@
   function populateBranchSelects() {
     const opts = BRANCHES.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
     $("#ref-branch").innerHTML = `<option value="">Select branch…</option>` + opts;
-    $("#goal-branch").innerHTML = opts;
+    $("#goal-branch").innerHTML = `<option value="">All branches</option>` + opts;
     $("#dash-branch").innerHTML = `<option value="all">All branches</option>` + opts;
   }
   function refreshDatalists() {
@@ -320,13 +320,10 @@
   function goalMatches(goal, ref) {
     if (goal.start && ref.date < goal.start) return false;
     if (goal.end && ref.date > goal.end) return false;
-    if (goal.scope === "initial") return ref.type === "initial";
-    if (goal.scope === "additional") return ref.type === "additional";
-    if (goal.scope === "branch")
-      return (ref.branch || "").toLowerCase() === (goal.branch || "").toLowerCase();
-    if (goal.scope === "employee")
-      return (ref.employee || "").toLowerCase() === (goal.employee || "").toLowerCase();
-    return true;
+    if (goal.branch && (ref.branch || "").toLowerCase() !== goal.branch.toLowerCase()) return false;
+    if (goal.fundType === "initial") return ref.type === "initial";
+    if (goal.fundType === "additional") return ref.type === "additional";
+    return true; // total = initial + additional
   }
   function goalProgress(goal) {
     const matched = referrals.filter((r) => r.status !== "declined" && goalMatches(goal, r));
@@ -337,11 +334,10 @@
     return { current, pct };
   }
   function scopeLabel(goal) {
-    if (goal.scope === "initial") return "Initial funds";
-    if (goal.scope === "additional") return "Additional funds";
-    if (goal.scope === "branch") return goal.branch || "Branch";
-    if (goal.scope === "employee") return goal.employee || "Employee";
-    return "All referrals";
+    const b = goal.branch ? goal.branch : "All branches";
+    const t = goal.fundType === "initial" ? "Initial"
+      : goal.fundType === "additional" ? "Additional" : "Total";
+    return b + " · " + t;
   }
   function metricValue(goal, v) {
     return goal.metric === "count" ? Math.round(v).toLocaleString("en-US") : fmtMoney0(v);
@@ -396,12 +392,6 @@
 
   // ---- Goal modal ----------------------------------------------------------
   const goalModal = $("#goal-modal");
-  function toggleGoalScopeFields() {
-    const scope = $("#goal-scope").value;
-    $("#goal-employee-wrap").hidden = scope !== "employee";
-    $("#goal-branch-wrap").hidden = scope !== "branch";
-  }
-  $("#goal-scope").addEventListener("change", toggleGoalScopeFields);
 
   function openGoalModal(id) {
     const editing = goals.find((g) => g.id === id);
@@ -410,13 +400,11 @@
     $("#goal-id").value = editing ? editing.id : "";
     $("#goal-name").value = editing ? editing.name : "";
     $("#goal-metric").value = editing ? editing.metric : "amount";
-    $("#goal-scope").value = editing ? editing.scope : "all";
-    $("#goal-employee").value = editing ? editing.employee || "" : "";
     $("#goal-branch").value = editing ? editing.branch || "" : "";
+    $("#goal-fundtype").value = editing ? editing.fundType || "total" : "total";
     $("#goal-target").value = editing ? editing.target : "";
     $("#goal-start").value = editing ? editing.start || "" : "";
     $("#goal-end").value = editing ? editing.end || "" : "";
-    toggleGoalScopeFields();
     goalModal.hidden = false;
     $("#goal-name").focus();
   }
@@ -433,9 +421,8 @@
     const data = {
       name: $("#goal-name").value.trim(),
       metric: $("#goal-metric").value,
-      scope: $("#goal-scope").value,
-      employee: $("#goal-employee").value.trim(),
       branch: $("#goal-branch").value,
+      fundType: $("#goal-fundtype").value,
       target: parseFloat($("#goal-target").value) || 0,
       start: $("#goal-start").value || "",
       end: $("#goal-end").value || "",
@@ -496,6 +483,51 @@
         </div>`
       )
       .join("");
+
+    // Per-branch breakdown — all branches, period only (ignores the branch filter).
+    const periodActive = referrals.filter((r) => inPeriod(r, period) && r.status !== "declined");
+    const bAgg = {};
+    periodActive.forEach((r) => {
+      const k = r.branch || "(no branch)";
+      const e = bAgg[k] || (bAgg[k] = { initial: 0, additional: 0, count: 0 });
+      if (r.type === "initial") e.initial += Number(r.amount) || 0;
+      else e.additional += Number(r.amount) || 0;
+      e.count++;
+    });
+    const bRows = Object.entries(bAgg).sort(
+      (a, b) => (b[1].initial + b[1].additional) - (a[1].initial + a[1].additional)
+    );
+    $("#branch-table tbody").innerHTML = bRows.length
+      ? bRows
+          .map(
+            ([name, v]) => `<tr>
+              <td>${esc(name)}</td>
+              <td class="num">${esc(fmtMoney0(v.initial))}</td>
+              <td class="num">${esc(fmtMoney0(v.additional))}</td>
+              <td class="num">${esc(fmtMoney0(v.initial + v.additional))}</td>
+              <td class="num">${v.count}</td>
+            </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="5" class="muted" style="text-align:center">No referrals in this period.</td></tr>`;
+    const bTot = periodActive.reduce(
+      (a, r) => {
+        if (r.type === "initial") a.initial += Number(r.amount) || 0;
+        else a.additional += Number(r.amount) || 0;
+        a.count++;
+        return a;
+      },
+      { initial: 0, additional: 0, count: 0 }
+    );
+    $("#branch-table tfoot").innerHTML = bRows.length
+      ? `<tr>
+          <th>All branches</th>
+          <th class="num">${esc(fmtMoney0(bTot.initial))}</th>
+          <th class="num">${esc(fmtMoney0(bTot.additional))}</th>
+          <th class="num">${esc(fmtMoney0(bTot.initial + bTot.additional))}</th>
+          <th class="num">${bTot.count}</th>
+        </tr>`
+      : "";
 
     const byEmp = {};
     active.forEach((r) => {

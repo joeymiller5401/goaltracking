@@ -99,6 +99,24 @@
 
         <div class="cards" id="summary-cards"></div>
 
+        <div class="card-block">
+          <h3>By branch</h3>
+          <p class="muted small">Active referrals per branch for the selected period (all branches, regardless of the branch filter above).</p>
+          <table class="data" id="branch-table">
+            <thead>
+              <tr>
+                <th>Branch</th>
+                <th class="num">Initial $</th>
+                <th class="num">Additional $</th>
+                <th class="num">Total $</th>
+                <th class="num">Referrals</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+        </div>
+
         <div class="grid-2">
           <div class="card-block">
             <h3>Credit by employee</h3>
@@ -270,20 +288,15 @@
               <option value="count">Number of referrals</option>
             </select>
           </label>
-          <label>Applies to
-            <select id="goal-scope">
-              <option value="all">All referrals</option>
-              <option value="initial">Initial only</option>
-              <option value="additional">Additional only</option>
-              <option value="branch">Specific branch</option>
-              <option value="employee">Specific employee</option>
-            </select>
-          </label>
-          <label id="goal-branch-wrap" hidden>Branch
+          <label>Branch
             <select id="goal-branch"></select>
           </label>
-          <label id="goal-employee-wrap" hidden>Employee
-            <input type="text" id="goal-employee" list="employee-list" placeholder="Employee name" />
+          <label>Funds
+            <select id="goal-fundtype">
+              <option value="total">Total (initial + additional)</option>
+              <option value="initial">Initial only</option>
+              <option value="additional">Additional only</option>
+            </select>
           </label>
           <label>Target
             <input type="number" id="goal-target" step="0.01" min="0" required />
