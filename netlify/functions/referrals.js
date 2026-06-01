@@ -6,15 +6,6 @@ const { requireUser } = require("./_lib/auth");
 const { encrypt, decrypt } = require("./_lib/crypto");
 const { json } = require("./_lib/respond");
 
-const SELECT = (q, where) => q`
-  SELECT r.id,
-         to_char(r.date, 'YYYY-MM-DD') AS date,
-         r.type, r.status, r.enc, r.created_at,
-         u.name AS owner_name, u.email AS owner_email
-  FROM referrals r
-  LEFT JOIN users u ON u.id = r.owner_id
-  ${where}`;
-
 function rowToReferral(r) {
   const d = decrypt(r.enc);
   return {
@@ -30,6 +21,16 @@ function rowToReferral(r) {
     owner: r.owner_name || r.owner_email || "",
     createdAt: r.created_at,
   };
+}
+
+// Re-read a single referral (with owner join) after insert/update.
+async function fetchOne(q, id) {
+  const rows = await q`
+    SELECT r.id, to_char(r.date, 'YYYY-MM-DD') AS date, r.type, r.status, r.enc, r.created_at,
+           u.name AS owner_name, u.email AS owner_email
+    FROM referrals r LEFT JOIN users u ON u.id = r.owner_id
+    WHERE r.id = ${id}`;
+  return rows[0] ? rowToReferral(rows[0]) : null;
 }
 
 function validate(b) {
@@ -56,7 +57,11 @@ exports.handler = async (event) => {
     const id = event.queryStringParameters && event.queryStringParameters.id;
 
     if (method === "GET") {
-      const rows = await SELECT(q, q`ORDER BY r.date DESC, r.created_at DESC`);
+      const rows = await q`
+        SELECT r.id, to_char(r.date, 'YYYY-MM-DD') AS date, r.type, r.status, r.enc, r.created_at,
+               u.name AS owner_name, u.email AS owner_email
+        FROM referrals r LEFT JOIN users u ON u.id = r.owner_id
+        ORDER BY r.date DESC, r.created_at DESC`;
       return json(200, { referrals: rows.map(rowToReferral) });
     }
 
@@ -74,8 +79,7 @@ exports.handler = async (event) => {
           INSERT INTO referrals (owner_id, date, type, status, enc)
           VALUES (${user.sub}, ${v.date}, ${v.type}, ${v.status}, ${enc}::jsonb)
           RETURNING id`;
-        const rows = await SELECT(q, q`WHERE r.id = ${ins[0].id}`);
-        return json(200, { referral: rowToReferral(rows[0]) });
+        return json(200, { referral: await fetchOne(q, ins[0].id) });
       }
 
       if (!id) return json(400, { error: "Missing id" });
@@ -85,8 +89,7 @@ exports.handler = async (event) => {
         WHERE id = ${id}
         RETURNING id`;
       if (!upd.length) return json(404, { error: "Referral not found" });
-      const rows = await SELECT(q, q`WHERE r.id = ${id}`);
-      return json(200, { referral: rowToReferral(rows[0]) });
+      return json(200, { referral: await fetchOne(q, id) });
     }
 
     if (method === "DELETE") {

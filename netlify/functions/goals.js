@@ -1,18 +1,11 @@
-/* Goals CRUD. Team-shared. Goal name and target-employee are encrypted;
- * metric/scope/target/date-range stay in clear columns for filtering.
+/* Goals CRUD. Team-shared. A goal targets a branch (or all branches) and a
+ * fund type (total / initial / additional). The `scope` column stores the
+ * fund type; goal name and branch are encrypted in the `enc` blob.
  */
 const { sql, ensureSchema } = require("./_lib/db");
 const { requireUser } = require("./_lib/auth");
 const { encrypt, decrypt } = require("./_lib/crypto");
 const { json } = require("./_lib/respond");
-
-const SELECT = (q, where) => q`
-  SELECT id, metric, scope, target,
-         to_char(start_date, 'YYYY-MM-DD') AS start_date,
-         to_char(end_date, 'YYYY-MM-DD') AS end_date,
-         enc, created_at
-  FROM goals
-  ${where}`;
 
 function rowToGoal(r) {
   const d = decrypt(r.enc);
@@ -20,7 +13,6 @@ function rowToGoal(r) {
     id: r.id,
     name: d.name || "",
     branch: d.branch || "",
-    // The `scope` column now stores the fund type. Old rows fall back to total.
     fundType: ["total", "initial", "additional"].includes(r.scope) ? r.scope : "total",
     metric: r.metric,
     target: Number(r.target) || 0,
@@ -29,10 +21,19 @@ function rowToGoal(r) {
   };
 }
 
+async function fetchOne(q, id) {
+  const rows = await q`
+    SELECT id, metric, scope, target,
+           to_char(start_date, 'YYYY-MM-DD') AS start_date,
+           to_char(end_date, 'YYYY-MM-DD') AS end_date,
+           enc, created_at
+    FROM goals WHERE id = ${id}`;
+  return rows[0] ? rowToGoal(rows[0]) : null;
+}
+
 function validate(b) {
   if (!String(b.name || "").trim()) return { error: "Goal name is required" };
   const metric = b.metric === "count" ? "count" : "amount";
-  // Fund type is stored in the `scope` column.
   const scope = ["total", "initial", "additional"].includes(b.fundType) ? b.fundType : "total";
   const target = Number(b.target);
   if (!(target >= 0)) return { error: "A valid target is required" };
@@ -52,7 +53,12 @@ exports.handler = async (event) => {
     const id = event.queryStringParameters && event.queryStringParameters.id;
 
     if (method === "GET") {
-      const rows = await SELECT(q, q`ORDER BY created_at ASC`);
+      const rows = await q`
+        SELECT id, metric, scope, target,
+               to_char(start_date, 'YYYY-MM-DD') AS start_date,
+               to_char(end_date, 'YYYY-MM-DD') AS end_date,
+               enc, created_at
+        FROM goals ORDER BY created_at ASC`;
       return json(200, { goals: rows.map(rowToGoal) });
     }
 
@@ -68,8 +74,7 @@ exports.handler = async (event) => {
           INSERT INTO goals (owner_id, metric, scope, target, start_date, end_date, enc)
           VALUES (${user.sub}, ${v.metric}, ${v.scope}, ${v.target}, ${v.start}, ${v.end}, ${enc}::jsonb)
           RETURNING id`;
-        const rows = await SELECT(q, q`WHERE id = ${ins[0].id}`);
-        return json(200, { goal: rowToGoal(rows[0]) });
+        return json(200, { goal: await fetchOne(q, ins[0].id) });
       }
 
       if (!id) return json(400, { error: "Missing id" });
@@ -80,8 +85,7 @@ exports.handler = async (event) => {
         WHERE id = ${id}
         RETURNING id`;
       if (!upd.length) return json(404, { error: "Goal not found" });
-      const rows = await SELECT(q, q`WHERE id = ${id}`);
-      return json(200, { goal: rowToGoal(rows[0]) });
+      return json(200, { goal: await fetchOne(q, id) });
     }
 
     if (method === "DELETE") {
