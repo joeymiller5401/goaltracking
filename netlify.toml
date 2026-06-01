@@ -1,0 +1,15 @@
+# Netlify configuration for the Referral Goal Tracker.
+# This is a static, build-free site: the files in the repo root ARE the site.
+
+[build]
+  publish = "."
+  # No build step needed — plain HTML/CSS/JS.
+  command = ""
+
+# Security headers (sensible defaults for an internal tool).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
