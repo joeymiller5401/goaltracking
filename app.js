@@ -456,9 +456,10 @@
     const additional = active.filter((r) => r.type === "additional");
     const sum = (arr) => arr.reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
+    const declined = rows.length - active.length;
     const cards = [
-      { cls: "", label: "Total referrals", value: active.length.toLocaleString("en-US"),
-        sub: `${rows.length - active.length} declined` },
+      { cls: "total", label: "Total investment", value: fmtMoney0(sum(active)),
+        sub: `${active.length} referral${active.length === 1 ? "" : "s"}${declined ? " · " + declined + " declined" : ""}` },
       { cls: "initial", label: "Initial funds", value: fmtMoney0(sum(initial)),
         sub: `${initial.length} referral${initial.length === 1 ? "" : "s"}` },
       { cls: "additional", label: "Additional funds", value: fmtMoney0(sum(additional)),

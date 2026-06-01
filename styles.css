@@ -92,6 +92,7 @@ main { padding: 24px 28px 60px; max-width: 1180px; margin: 0 auto; }
 .metric .label { font-size: 13px; color: var(--muted); font-weight: 500; }
 .metric .value { font-size: 24px; font-weight: 700; margin-top: 6px; }
 .metric .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.metric.total { border-top: 3px solid var(--bg); }
 .metric.initial { border-top: 3px solid var(--primary); }
 .metric.additional { border-top: 3px solid var(--green); }
 
