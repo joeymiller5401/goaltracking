@@ -131,15 +131,16 @@
 
         <div class="grid-2">
           <div class="card-block">
-            <h3>Credit by employee</h3>
-            <p class="muted small">Estimated credit using the rates in Settings. Excludes declined referrals.</p>
+            <h3>By employee</h3>
+            <p class="muted small">Excludes declined referrals. “Qualified” = number of initial referrals (initial sales also count toward investment goals).</p>
             <table class="data" id="credit-table">
               <thead>
                 <tr>
                   <th>Employee</th>
+                  <th class="num">Qualified</th>
                   <th class="num">Initial $</th>
                   <th class="num">Additional $</th>
-                  <th class="num">Credit $</th>
+                  <th class="num">Total $</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -221,19 +222,6 @@
             </thead>
             <tbody></tbody>
           </table>
-        </div>
-
-        <div class="card-block narrow">
-          <h3>Credit rates</h3>
-          <p class="muted small">Initial and additional funds are credited differently. These rates drive the “Credit $” estimates on the dashboard and are shared across the team.</p>
-          <label>Initial funds credit rate (%)
-            <input type="number" id="rate-initial" step="0.01" min="0" />
-          </label>
-          <label>Additional funds credit rate (%)
-            <input type="number" id="rate-additional" step="0.01" min="0" />
-          </label>
-          <button class="btn primary" id="save-settings">Save</button>
-          <span class="save-note" id="settings-saved" hidden>Saved ✓</span>
         </div>
 
         <div class="card-block narrow">

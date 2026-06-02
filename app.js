@@ -15,7 +15,6 @@
   // ---- In-memory state (mirrors the server) --------------------------------
   let referrals = [];
   let goals = [];
-  let settings = { rateInitial: 1.0, rateAdditional: 0.5 };
 
   // ---- DOM helpers ---------------------------------------------------------
   const $ = (sel, root) => (root || document).querySelector(sel);
@@ -83,10 +82,6 @@
     $("#dash-branch-label").hidden = !admin;
     $("#branch-card").hidden = !admin;
     $("#admin-panel").hidden = !admin;
-    // Credit rates are shared across the team — admins only.
-    $("#rate-initial").disabled = !admin;
-    $("#rate-additional").disabled = !admin;
-    $("#save-settings").disabled = !admin;
     if (!admin) $("#dash-branch").value = "all";
     if (admin) renderBranchCodes();
   }
@@ -151,15 +146,12 @@
   // ---- Load everything after sign-in --------------------------------------
   async function loadAll() {
     try {
-      const [refs, gls, st] = await Promise.all([
+      const [refs, gls] = await Promise.all([
         Api.listReferrals(),
         Api.listGoals(),
-        Api.getSettings(),
       ]);
       referrals = refs;
       goals = gls;
-      settings = st;
-      loadSettingsForm();
       renderReferrals();
       renderGoals();
       renderDashboard();
@@ -679,10 +671,6 @@
   // =========================================================================
   //  DASHBOARD
   // =========================================================================
-  function creditFor(ref) {
-    const rate = ref.type === "initial" ? settings.rateInitial : settings.rateAdditional;
-    return (Number(ref.amount) || 0) * (Number(rate) || 0) / 100;
-  }
 
   // Stacked monthly bar chart (Initial vs Additional), last 12 months in range.
   function monthlyChartSVG(rows) {
@@ -756,8 +744,8 @@
         sub: `${initial.length} referral${initial.length === 1 ? "" : "s"}` },
       { cls: "additional", label: "Additional funds", value: fmtMoney0(sum(additional)),
         sub: `${additional.length} referral${additional.length === 1 ? "" : "s"}` },
-      { cls: "", label: "Est. total credit", value: fmtMoney0(active.reduce((s, r) => s + creditFor(r), 0)),
-        sub: "across all employees" },
+      { cls: "", label: "Qualified referrals", value: initial.length.toLocaleString("en-US"),
+        sub: "initial sales" },
     ];
     $("#summary-cards").innerHTML = cards
       .map(
@@ -819,24 +807,26 @@
     const byEmp = {};
     active.forEach((r) => {
       const k = r.employee || "(unassigned)";
-      const e = byEmp[k] || (byEmp[k] = { initial: 0, additional: 0, credit: 0 });
-      if (r.type === "initial") e.initial += Number(r.amount) || 0;
+      const e = byEmp[k] || (byEmp[k] = { qualified: 0, initial: 0, additional: 0 });
+      if (r.type === "initial") { e.initial += Number(r.amount) || 0; e.qualified += 1; }
       else e.additional += Number(r.amount) || 0;
-      e.credit += creditFor(r);
     });
-    const empRows = Object.entries(byEmp).sort((a, b) => b[1].credit - a[1].credit);
+    const empRows = Object.entries(byEmp).sort(
+      (a, b) => (b[1].initial + b[1].additional) - (a[1].initial + a[1].additional)
+    );
     $("#credit-table tbody").innerHTML = empRows.length
       ? empRows
           .map(
             ([name, v]) => `<tr>
               <td>${esc(name)}</td>
+              <td class="num">${v.qualified}</td>
               <td class="num">${esc(fmtMoney0(v.initial))}</td>
               <td class="num">${esc(fmtMoney0(v.additional))}</td>
-              <td class="num">${esc(fmtMoney(v.credit))}</td>
+              <td class="num">${esc(fmtMoney0(v.initial + v.additional))}</td>
             </tr>`
           )
           .join("")
-      : `<tr><td colspan="4" class="muted" style="text-align:center">No referrals in this period.</td></tr>`;
+      : `<tr><td colspan="5" class="muted" style="text-align:center">No referrals in this period.</td></tr>`;
 
     // Goals are branch-specific, so an admin must pick a branch before the
     // goal list is meaningful. Branch users always see their own branch's goals.
@@ -869,22 +859,6 @@
   // =========================================================================
   //  SETTINGS
   // =========================================================================
-  function loadSettingsForm() {
-    $("#rate-initial").value = settings.rateInitial;
-    $("#rate-additional").value = settings.rateAdditional;
-  }
-  $("#save-settings").addEventListener("click", async () => {
-    try {
-      settings = await Api.saveSettings({
-        rateInitial: parseFloat($("#rate-initial").value) || 0,
-        rateAdditional: parseFloat($("#rate-additional").value) || 0,
-      });
-      const note = $("#settings-saved");
-      note.hidden = false;
-      setTimeout(() => (note.hidden = true), 1800);
-      renderDashboard();
-    } catch (err) { alert("Could not save settings: " + err.message); }
-  });
 
   // ---- Admin: branch signup codes -----------------------------------------
   async function renderBranchCodes() {

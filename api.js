@@ -59,9 +59,6 @@ window.Api = (function () {
     updateGoal(id, d) { return req("/goals?id=" + encodeURIComponent(id), "PUT", d).then((r) => r.goal); },
     deleteGoal(id) { return req("/goals?id=" + encodeURIComponent(id), "DELETE"); },
 
-    getSettings() { return req("/settings").then((r) => r.settings); },
-    saveSettings(d) { return req("/settings", "PUT", d).then((r) => r.settings); },
-
     listBranchCodes() { return req("/branch-codes").then((r) => r.codes); },
     regenBranchCode(branch) { return req("/branch-codes", "POST", { branch }); },
   };
