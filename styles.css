@@ -303,6 +303,21 @@ label input, label select, label textarea { margin-top: 5px; }
 
 /* Branch goal grid (dashboard) */
 .branch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 18px; }
+
+/* Branch-user feature cards */
+.feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 18px; }
+.goal-feature { cursor: pointer; transition: transform .12s, box-shadow .12s; }
+.goal-feature:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(15,23,42,.12); }
+.goal-feature:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.gf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.gf-head h3 { margin: 0; font-size: 18px; }
+.gf-body { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
+.gf-rings { display: flex; gap: 28px; flex: 1 1 auto; justify-content: center; }
+.gf-ring { text-align: center; }
+.gf-ring-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
+.gf-ring-fig { font-size: 14px; margin-top: 4px; }
+.gf-ring-fig b { font-size: 17px; }
+.gf-stats { flex: 1 1 280px; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; align-self: stretch; }
 .branch-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
 .branch-box-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
 .branch-box-head h3 { margin: 0; font-size: 16px; }

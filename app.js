@@ -65,6 +65,9 @@
   function showApp() {
     authScreen.hidden = true;
     appRoot.hidden = false;
+    // Always land on the Dashboard tab on sign-in.
+    $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === "dashboard"));
+    $$(".panel").forEach((p) => p.classList.toggle("active", p.id === "tab-dashboard"));
     applyRole();
   }
 
@@ -688,25 +691,64 @@
     </div>`;
   }
 
-  // Dashboard = one box per branch (admin sees all branches, a branch user sees
-  // only their own), each showing that branch's goals and live progress.
+  // Large "feature" goal card for the branch-user dashboard (uses the space
+  // since a branch user only has one branch).
+  function featureGoalCardHTML(g) {
+    const p = goalProgress(g);
+    const range = [g.start ? fmtDate(g.start) : null, g.end ? fmtDate(g.end) : null].filter(Boolean).join(" – ");
+    const rings = [];
+    if (g.amountTarget > 0) rings.push(`<div class="gf-ring"><div class="gf-ring-label">Investment</div>${donutSVG(p.amountPct)}<div class="gf-ring-fig"><b>${esc(fmtMoney0(p.amountCurrent))}</b> <span class="muted">/ ${esc(fmtMoney0(g.amountTarget))}</span></div></div>`);
+    if (g.qualifiedTarget > 0) rings.push(`<div class="gf-ring"><div class="gf-ring-label">Qualified referrals</div>${donutSVG(p.qualifiedPct)}<div class="gf-ring-fig"><b>${esc(fmtCount(p.qualifiedCurrent))}</b> <span class="muted">/ ${esc(fmtCount(g.qualifiedTarget))}</span></div></div>`);
+
+    const tiles = [];
+    if (g.amountTarget > 0) tiles.push(statTile("Investment remaining", fmtMoney0(Math.max(0, g.amountTarget - p.amountCurrent)), p.amountPct >= 100 ? "met 🎉" : ""));
+    if (g.qualifiedTarget > 0) tiles.push(statTile("Qualified remaining", fmtCount(Math.max(0, g.qualifiedTarget - p.qualifiedCurrent)), p.qualifiedPct >= 100 ? "met 🎉" : ""));
+    tiles.push(statTile("Referrals", fmtCount(p.matched.length), p.matched.filter((r) => r.type === "initial").length + " initial"));
+    if (g.end) {
+      const days = Math.ceil((new Date(g.end + "T00:00:00").getTime() - Date.now()) / 86400000);
+      tiles.push(statTile("Days left", days >= 0 ? String(days) : "ended", days >= 0 ? "until " + fmtDate(g.end) : "on " + fmtDate(g.end)));
+    }
+
+    return `<div class="card-block goal-feature" data-goal-id="${esc(g.id)}" role="button" tabindex="0">
+      <div class="gf-head">
+        <h3>${esc(g.name)}</h3>
+        <span class="muted small">${esc(scopeLabel(g))}${range ? " · " + esc(range) : ""}</span>
+      </div>
+      <div class="gf-body">
+        <div class="gf-rings">${rings.join("")}</div>
+        <div class="gf-stats">${tiles.join("")}</div>
+      </div>
+    </div>`;
+  }
+
+  // Dashboard: admins see a box per branch; a branch user sees large feature
+  // cards for their own branch's goals.
   function renderDashboard() {
     const grid = $("#branch-goal-grid");
     if (!grid) return;
     const admin = isAdmin();
-    const branches = admin ? BRANCHES.slice() : [(Api.currentUser() || {}).branch].filter(Boolean);
-    grid.innerHTML = branches.map(branchBoxHTML).join("");
-    $("#dash-empty").hidden = goals.length !== 0;
-    $("#dash-intro").hidden = goals.length === 0;
+    if (admin) {
+      grid.className = "branch-grid";
+      grid.innerHTML = BRANCHES.map(branchBoxHTML).join("");
+      $("#dash-empty").hidden = goals.length !== 0;
+      $("#dash-intro").hidden = goals.length === 0;
+    } else {
+      const branch = (Api.currentUser() || {}).branch || "";
+      const list = goals.filter((g) => g.branch === branch);
+      grid.className = "feature-grid";
+      grid.innerHTML = list.map(featureGoalCardHTML).join("");
+      $("#dash-empty").hidden = list.length !== 0;
+      $("#dash-intro").hidden = list.length === 0;
+    }
   }
 
   $("#branch-goal-grid").addEventListener("click", (e) => {
-    const el = e.target.closest(".branch-goal");
+    const el = e.target.closest("[data-goal-id]");
     if (el) openGoalDetail(el.dataset.goalId);
   });
   $("#branch-goal-grid").addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
-    const el = e.target.closest(".branch-goal");
+    const el = e.target.closest("[data-goal-id]");
     if (el) { e.preventDefault(); openGoalDetail(el.dataset.goalId); }
   });
 
