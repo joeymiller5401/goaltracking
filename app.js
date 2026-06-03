@@ -606,8 +606,11 @@
     }
     $("#goal-amount-target").value = editing && editing.amountTarget ? editing.amountTarget : "";
     $("#goal-qualified-target").value = editing && editing.qualifiedTarget ? editing.qualifiedTarget : "";
-    $("#goal-start").value = editing ? editing.start || "" : "";
-    $("#goal-end").value = editing ? editing.end || "" : "";
+    // New goals default to the current calendar year (Jan 1 – Dec 31); computed
+    // at open time so it rolls over automatically each year.
+    const yr = new Date().getFullYear();
+    $("#goal-start").value = editing ? (editing.start || "") : `${yr}-01-01`;
+    $("#goal-end").value = editing ? (editing.end || "") : `${yr}-12-31`;
     goalModal.hidden = false;
     $("#goal-name").focus();
   }
