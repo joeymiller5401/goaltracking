@@ -79,10 +79,8 @@
     const admin = u.role === "admin";
     $("#user-name").textContent =
       (u.name || u.email || "") + (admin ? " · Admin" : (u.branch ? " · " + u.branch : ""));
-    $("#dash-branch-label").hidden = !admin;
-    $("#branch-card").hidden = !admin;
+    $("#dash-title").textContent = admin ? "Branch goals" : ((u.branch || "") + " goals");
     $("#admin-panel").hidden = !admin;
-    if (!admin) $("#dash-branch").value = "all";
     if (admin) renderBranchCodes();
   }
 
@@ -178,7 +176,6 @@
     const opts = BRANCHES.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
     $("#ref-branch").innerHTML = `<option value="">Select branch…</option>` + opts;
     $("#goal-branch").innerHTML = `<option value="">All branches</option>` + opts;
-    $("#dash-branch").innerHTML = `<option value="all">All branches</option>` + opts;
   }
   function refreshDatalists() {
     const employees = [...new Set(referrals.map((r) => r.employee).filter(Boolean))].sort();
@@ -672,189 +669,71 @@
   //  DASHBOARD
   // =========================================================================
 
-  // Stacked monthly bar chart (Initial vs Additional), last 12 months in range.
-  function monthlyChartSVG(rows) {
-    const byMonth = {};
-    rows.forEach((r) => {
-      if (!/^\d{4}-\d{2}/.test(r.date || "")) return;
-      const m = r.date.slice(0, 7);
-      const e = byMonth[m] || (byMonth[m] = { initial: 0, additional: 0 });
-      if (r.type === "initial") e.initial += Number(r.amount) || 0;
-      else e.additional += Number(r.amount) || 0;
-    });
-    const present = Object.keys(byMonth).sort();
-    if (!present.length) return `<p class="muted small">No referrals to chart for this selection.</p>`;
-
-    // Fill the continuous month range, then keep the most recent 12.
-    const months = [];
-    let [sy, sm] = present[0].split("-").map(Number);
-    const [ey, em] = present[present.length - 1].split("-").map(Number);
-    while (sy < ey || (sy === ey && sm <= em)) {
-      months.push(`${sy}-${String(sm).padStart(2, "0")}`);
-      sm++; if (sm > 12) { sm = 1; sy++; }
-    }
-    const data = months.slice(-12).map((m) => ({ m, initial: (byMonth[m] || {}).initial || 0, additional: (byMonth[m] || {}).additional || 0 }));
-    const yMax = Math.max(1, ...data.map((d) => d.initial + d.additional));
-
-    const W = 680, padL = 60, padR = 14, padT = 14, padB = 40, innerH = 160;
-    const innerW = W - padL - padR, H = padT + innerH + padB, sy0 = padT + innerH;
-    const slot = innerW / data.length, bw = Math.min(46, slot * 0.6);
-    const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const label = (m, i) => {
-      const [y, mm] = m.split("-").map(Number);
-      return (mm === 1 || i === 0) ? names[mm - 1] + " '" + String(y).slice(2) : names[mm - 1];
-    };
-
-    let bars = "";
-    data.forEach((d, i) => {
-      const cx = padL + slot * i + slot / 2, x = cx - bw / 2;
-      const hi = (d.initial / yMax) * innerH, ha = (d.additional / yMax) * innerH;
-      const yi = sy0 - hi, ya = yi - ha;
-      const tip = `${label(d.m, i)} — Initial ${fmtMoney0(d.initial)}, Additional ${fmtMoney0(d.additional)}, Total ${fmtMoney0(d.initial + d.additional)}`;
-      bars += `<g><title>${esc(tip)}</title>`;
-      if (d.initial > 0) bars += `<rect x="${x.toFixed(1)}" y="${yi.toFixed(1)}" width="${bw.toFixed(1)}" height="${hi.toFixed(1)}" fill="#1d4ed8" rx="2"/>`;
-      if (d.additional > 0) bars += `<rect x="${x.toFixed(1)}" y="${ya.toFixed(1)}" width="${bw.toFixed(1)}" height="${ha.toFixed(1)}" fill="#15803d" rx="2"/>`;
-      bars += `<text x="${cx.toFixed(1)}" y="${H - 20}" text-anchor="middle" class="chart-axis">${esc(label(d.m, i))}</text></g>`;
-    });
-
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" class="chart" preserveAspectRatio="xMidYMid meet">
-      <line x1="${padL}" y1="${sy0}" x2="${W - padR}" y2="${sy0}" stroke="#e2e8f0"/>
-      <text x="${padL - 8}" y="${sy0}" text-anchor="end" dominant-baseline="middle" class="chart-axis">0</text>
-      <text x="${padL - 8}" y="${padT + 6}" text-anchor="end" class="chart-axis">${esc(fmtMoney0(yMax))}</text>
-      ${bars}
+  // Small progress ring for a branch box's goal row.
+  function miniDonutSVG(pct) {
+    const r = 26, c = 2 * Math.PI * r, w = 64, cx = w / 2, cy = w / 2;
+    const dash = (Math.min(100, Math.max(0, pct)) / 100) * c;
+    const color = pct >= 100 ? "#15803d" : "#1d4ed8";
+    return `<svg viewBox="0 0 ${w} ${w}" width="64" height="64">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#e2e8f0" stroke-width="8"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="8"
+        stroke-linecap="round" stroke-dasharray="${dash.toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>
+      <text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="middle"
+        style="font-size:15px;font-weight:800;fill:#0f172a">${Math.round(pct)}</text>
     </svg>`;
   }
 
-  function renderDashboard() {
-    const period = $("#dash-period").value;
-    const branch = $("#dash-branch").value;
-    let rows = referrals.filter((r) => inPeriod(r, period));
-    if (branch !== "all") rows = rows.filter((r) => (r.branch || "") === branch);
-    const active = rows.filter((r) => r.status !== "declined");
-
-    const initial = active.filter((r) => r.type === "initial");
-    const additional = active.filter((r) => r.type === "additional");
-    const sum = (arr) => arr.reduce((s, r) => s + (Number(r.amount) || 0), 0);
-
-    const declined = rows.length - active.length;
-    const cards = [
-      { cls: "total", label: "Total investment", value: fmtMoney0(sum(active)),
-        sub: `${active.length} referral${active.length === 1 ? "" : "s"}${declined ? " · " + declined + " declined" : ""}` },
-      { cls: "initial", label: "Initial funds", value: fmtMoney0(sum(initial)),
-        sub: `${initial.length} referral${initial.length === 1 ? "" : "s"}` },
-      { cls: "additional", label: "Additional funds", value: fmtMoney0(sum(additional)),
-        sub: `${additional.length} referral${additional.length === 1 ? "" : "s"}` },
-      { cls: "", label: "Qualified referrals", value: initial.length.toLocaleString("en-US"),
-        sub: "initial sales" },
-    ];
-    $("#summary-cards").innerHTML = cards
-      .map(
-        (c) => `<div class="metric ${c.cls}">
-          <div class="label">${esc(c.label)}</div>
-          <div class="value">${esc(c.value)}</div>
-          <div class="sub">${esc(c.sub)}</div>
-        </div>`
-      )
-      .join("");
-
-    $("#monthly-chart").innerHTML = monthlyChartSVG(active);
-
-    // Per-branch breakdown — all branches, period only (ignores the branch filter).
-    const periodActive = referrals.filter((r) => inPeriod(r, period) && r.status !== "declined");
-    const bAgg = {};
-    periodActive.forEach((r) => {
-      const k = r.branch || "(no branch)";
-      const e = bAgg[k] || (bAgg[k] = { initial: 0, additional: 0, count: 0 });
-      if (r.type === "initial") e.initial += Number(r.amount) || 0;
-      else e.additional += Number(r.amount) || 0;
-      e.count++;
-    });
-    const bRows = Object.entries(bAgg).sort(
-      (a, b) => (b[1].initial + b[1].additional) - (a[1].initial + a[1].additional)
-    );
-    $("#branch-table tbody").innerHTML = bRows.length
-      ? bRows
-          .map(
-            ([name, v]) => `<tr>
-              <td>${esc(name)}</td>
-              <td class="num">${esc(fmtMoney0(v.initial))}</td>
-              <td class="num">${esc(fmtMoney0(v.additional))}</td>
-              <td class="num">${esc(fmtMoney0(v.initial + v.additional))}</td>
-              <td class="num">${v.count}</td>
-            </tr>`
-          )
-          .join("")
-      : `<tr><td colspan="5" class="muted" style="text-align:center">No referrals in this period.</td></tr>`;
-    const bTot = periodActive.reduce(
-      (a, r) => {
-        if (r.type === "initial") a.initial += Number(r.amount) || 0;
-        else a.additional += Number(r.amount) || 0;
-        a.count++;
-        return a;
-      },
-      { initial: 0, additional: 0, count: 0 }
-    );
-    $("#branch-table tfoot").innerHTML = bRows.length
-      ? `<tr>
-          <th>All branches</th>
-          <th class="num">${esc(fmtMoney0(bTot.initial))}</th>
-          <th class="num">${esc(fmtMoney0(bTot.additional))}</th>
-          <th class="num">${esc(fmtMoney0(bTot.initial + bTot.additional))}</th>
-          <th class="num">${bTot.count}</th>
-        </tr>`
-      : "";
-
-    const byEmp = {};
-    active.forEach((r) => {
-      const k = r.employee || "(unassigned)";
-      const e = byEmp[k] || (byEmp[k] = { qualified: 0, initial: 0, additional: 0 });
-      if (r.type === "initial") { e.initial += Number(r.amount) || 0; e.qualified += 1; }
-      else e.additional += Number(r.amount) || 0;
-    });
-    const empRows = Object.entries(byEmp).sort(
-      (a, b) => (b[1].initial + b[1].additional) - (a[1].initial + a[1].additional)
-    );
-    $("#credit-table tbody").innerHTML = empRows.length
-      ? empRows
-          .map(
-            ([name, v]) => `<tr>
-              <td>${esc(name)}</td>
-              <td class="num">${v.qualified}</td>
-              <td class="num">${esc(fmtMoney0(v.initial))}</td>
-              <td class="num">${esc(fmtMoney0(v.additional))}</td>
-              <td class="num">${esc(fmtMoney0(v.initial + v.additional))}</td>
-            </tr>`
-          )
-          .join("")
-      : `<tr><td colspan="5" class="muted" style="text-align:center">No referrals in this period.</td></tr>`;
-
-    // Goals are branch-specific, so an admin must pick a branch before the
-    // goal list is meaningful. Branch users always see their own branch's goals.
-    const dg = $("#dash-goals");
-    if (isAdmin() && branch === "all") {
-      dg.innerHTML = `<p class="muted small">Select a branch above to see its goals.</p>`;
-    } else {
-      const scopeBranch = isAdmin() ? branch : ((Api.currentUser() || {}).branch || "");
-      const list = goals.filter((g) => g.branch === scopeBranch);
-      if (!list.length) {
-        dg.innerHTML = `<p class="muted small">No goals for ${esc(scopeBranch)} yet. Add one on the Goals tab.</p>`;
-      } else {
-        dg.innerHTML = list
-          .slice(0, 5)
-          .map((g) => {
-            const { current, pct } = goalProgress(g);
-            const done = pct >= 100;
-            return `<div class="mini">
-              <h5>${esc(g.name)} <span>${esc(metricValue(g, current))} / ${esc(metricValue(g, g.target))}</span></h5>
-              <div class="progress ${done ? "done" : ""}"><span style="width:${pct}%"></span></div>
-            </div>`;
-          })
-          .join("");
-      }
-    }
+  function goalRowHTML(g) {
+    const { current, pct } = goalProgress(g);
+    const done = pct >= 100;
+    const t = g.fundType === "initial" ? "Initial" : g.fundType === "additional" ? "Additional" : "Total";
+    const tag = t + (g.metric === "count" ? " · count" : "");
+    return `<div class="branch-goal" data-goal-id="${esc(g.id)}" role="button" tabindex="0">
+      <div class="bg-donut">${miniDonutSVG(pct)}</div>
+      <div class="bg-info">
+        <div class="bg-name">${esc(g.name)} <span class="muted small">· ${esc(tag)}</span></div>
+        <div class="progress ${done ? "done" : ""}"><span style="width:${pct}%"></span></div>
+        <div class="bg-figures"><b>${esc(metricValue(g, current))}</b> <span class="muted">/ ${esc(metricValue(g, g.target))}</span>
+          <span class="bg-pct">${done ? "✓ met" : pct.toFixed(0) + "%"}</span></div>
+      </div>
+    </div>`;
   }
-  $("#dash-period").addEventListener("change", renderDashboard);
-  $("#dash-branch").addEventListener("change", renderDashboard);
+
+  function branchBoxHTML(branch) {
+    const bg = goals.filter((g) => g.branch === branch);
+    const body = bg.length
+      ? bg.map(goalRowHTML).join("")
+      : `<p class="branch-empty muted small">No goal set yet.</p>`;
+    return `<div class="branch-box">
+      <div class="branch-box-head">
+        <h3>${esc(branch)}</h3>
+        <span class="muted small">${bg.length} goal${bg.length === 1 ? "" : "s"}</span>
+      </div>
+      ${body}
+    </div>`;
+  }
+
+  // Dashboard = one box per branch (admin sees all branches, a branch user sees
+  // only their own), each showing that branch's goals and live progress.
+  function renderDashboard() {
+    const grid = $("#branch-goal-grid");
+    if (!grid) return;
+    const admin = isAdmin();
+    const branches = admin ? BRANCHES.slice() : [(Api.currentUser() || {}).branch].filter(Boolean);
+    grid.innerHTML = branches.map(branchBoxHTML).join("");
+    $("#dash-empty").hidden = goals.length !== 0;
+    $("#dash-intro").hidden = goals.length === 0;
+  }
+
+  $("#branch-goal-grid").addEventListener("click", (e) => {
+    const el = e.target.closest(".branch-goal");
+    if (el) openGoalDetail(el.dataset.goalId);
+  });
+  $("#branch-goal-grid").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const el = e.target.closest(".branch-goal");
+    if (el) { e.preventDefault(); openGoalDetail(el.dataset.goalId); }
+  });
 
   // =========================================================================
   //  SETTINGS

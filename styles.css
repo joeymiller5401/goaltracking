@@ -301,6 +301,23 @@ label input, label select, label textarea { margin-top: 5px; }
 .bar-label { font-size: 13px; fill: var(--text); }
 .bar-val { font-size: 12px; fill: var(--muted); font-weight: 600; }
 
+/* Branch goal grid (dashboard) */
+.branch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.branch-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.branch-box-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.branch-box-head h3 { margin: 0; font-size: 16px; }
+.branch-empty { margin: 8px 0 2px; }
+.branch-goal { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); cursor: pointer; border-radius: 8px; }
+.branch-box-head + .branch-goal { border-top: none; }
+.branch-goal:hover { background: var(--surface-2); margin: 0 -10px; padding-left: 10px; padding-right: 10px; }
+.branch-goal:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.bg-donut { flex: 0 0 auto; }
+.bg-info { flex: 1 1 auto; min-width: 0; }
+.bg-name { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.bg-figures { font-size: 13px; margin-top: 6px; }
+.bg-figures b { font-size: 15px; }
+.bg-pct { float: right; color: var(--muted); font-weight: 600; }
+
 .goal-progress-list { display: flex; flex-direction: column; gap: 16px; }
 .goal-progress-list .mini h5 { margin: 0 0 6px; font-size: 14px; display: flex; justify-content: space-between; }
 .goal-progress-list .mini h5 span { color: var(--muted); font-weight: 500; }

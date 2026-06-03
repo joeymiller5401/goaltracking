@@ -79,79 +79,11 @@
       <!-- DASHBOARD -->
       <section class="panel active" id="tab-dashboard">
         <div class="panel-head">
-          <h2>Dashboard</h2>
-          <div class="filter-inline">
-            <label id="dash-branch-label">Branch
-              <select id="dash-branch">
-                <option value="all">All branches</option>
-              </select>
-            </label>
-            <label>Period
-              <select id="dash-period">
-                <option value="all">All time</option>
-                <option value="ytd">Year to date</option>
-                <option value="qtd">Quarter to date</option>
-                <option value="mtd">Month to date</option>
-              </select>
-            </label>
-          </div>
+          <h2 id="dash-title">Branch goals</h2>
         </div>
-
-        <div class="cards" id="summary-cards"></div>
-
-        <div class="card-block" id="monthly-card">
-          <div class="card-head-row">
-            <h3>Monthly trend</h3>
-            <div class="legend">
-              <span class="legend-item"><span class="swatch initial"></span>Initial</span>
-              <span class="legend-item"><span class="swatch additional"></span>Additional</span>
-            </div>
-          </div>
-          <p class="muted small">Investment $ received per month, stacked by fund type (last 12 months in range). Respects the filters above.</p>
-          <div id="monthly-chart"></div>
-        </div>
-
-        <div class="card-block" id="branch-card">
-          <h3>By branch</h3>
-          <p class="muted small">Active referrals per branch for the selected period (all branches, regardless of the branch filter above).</p>
-          <table class="data" id="branch-table">
-            <thead>
-              <tr>
-                <th>Branch</th>
-                <th class="num">Initial $</th>
-                <th class="num">Additional $</th>
-                <th class="num">Total $</th>
-                <th class="num">Referrals</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-            <tfoot></tfoot>
-          </table>
-        </div>
-
-        <div class="grid-2">
-          <div class="card-block">
-            <h3>By employee</h3>
-            <p class="muted small">Excludes declined referrals. “Qualified” = number of initial referrals (initial sales also count toward investment goals).</p>
-            <table class="data" id="credit-table">
-              <thead>
-                <tr>
-                  <th>Employee</th>
-                  <th class="num">Qualified</th>
-                  <th class="num">Initial $</th>
-                  <th class="num">Additional $</th>
-                  <th class="num">Total $</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-
-          <div class="card-block">
-            <h3>Goal progress</h3>
-            <div id="dash-goals" class="goal-progress-list"></div>
-          </div>
-        </div>
+        <p class="muted small" id="dash-intro">Each branch's goals and how close its referrals are to hitting them. Click a goal for the full breakdown.</p>
+        <div class="branch-grid" id="branch-goal-grid"></div>
+        <p class="empty" id="dash-empty" hidden>No goals yet. Create one on the Goals tab and it will show up here under its branch.</p>
       </section>
 
       <!-- REFERRALS -->
