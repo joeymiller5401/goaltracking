@@ -12,7 +12,7 @@
   <div id="auth" class="auth-screen" hidden>
     <div class="auth-card">
       <div class="auth-brand">
-        <span class="logo">◆</span>
+        <img class="auth-logo" src="https://static.fmgsuite.com/media/documents/43642420-12d2-4f18-a82c-202eeb522c97.png" alt="Asset management firm logo" referrerpolicy="no-referrer" />
         <h1>Referral Goal Tracker</h1>
         <p class="muted small">Sign in to access the shared, encrypted referral ledger.</p>
       </div>
@@ -50,21 +50,32 @@
         <p class="auth-error" id="reg-error" hidden></p>
         <button class="btn primary wide" type="submit">Create account</button>
       </form>
+
+      <div class="auth-partner">
+        <span>Referrals from</span>
+        <img src="https://www.rhinebeckbank.com/Portals/RhinebeckBank/Rhinebeck_logo.png?ver=eLx5t8FNkO00fawn2NTitA%3d%3d" alt="Rhinebeck Bank" referrerpolicy="no-referrer" />
+      </div>
     </div>
   </div>
 
   <!-- APP -->
   <div id="app" hidden>
     <header class="topbar">
-      <div class="brand">
-        <span class="logo">◆</span>
-        <div>
-          <h1>Referral Goal Tracker</h1>
-          <p class="tagline">Track initial &amp; additional investment referrals and credit goals</p>
+      <div class="topbar-inner">
+        <div class="brand">
+          <img class="brand-logo" src="https://static.fmgsuite.com/media/documents/43642420-12d2-4f18-a82c-202eeb522c97.png" alt="Asset management firm logo" referrerpolicy="no-referrer" />
+          <div class="brand-divider"></div>
+          <div class="brand-text">
+            <h1>Referral Goal Tracker</h1>
+            <p class="tagline">Initial &amp; additional investment referrals</p>
+          </div>
         </div>
-        <div class="user-area">
-          <span class="user-name" id="user-name"></span>
-          <button class="btn small" id="logout-btn" type="button">Sign out</button>
+        <div class="topbar-right">
+          <img class="partner-logo" src="https://www.rhinebeckbank.com/Portals/RhinebeckBank/Rhinebeck_logo.png?ver=eLx5t8FNkO00fawn2NTitA%3d%3d" alt="Rhinebeck Bank" referrerpolicy="no-referrer" />
+          <div class="user-area">
+            <span class="user-name" id="user-name"></span>
+            <button class="btn small" id="logout-btn" type="button">Sign out</button>
+          </div>
         </div>
       </div>
       <nav class="tabs" id="tabs">
