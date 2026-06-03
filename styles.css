@@ -62,7 +62,7 @@ body {
 .tab:hover { color: #fff; background: rgba(255,255,255,.06); }
 .tab.active { background: var(--surface-2); color: var(--text); font-weight: 600; }
 
-main { padding: 24px 28px 60px; max-width: 1180px; margin: 0 auto; }
+main { padding: 24px 28px 60px; max-width: 1500px; margin: 0 auto; }
 
 .panel { display: none; }
 .panel.active { display: block; }
@@ -302,7 +302,7 @@ label input, label select, label textarea { margin-top: 5px; }
 .bar-val { font-size: 12px; fill: var(--muted); font-weight: 600; }
 
 /* Branch goal grid (dashboard) */
-.branch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.branch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 18px; }
 .branch-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
 .branch-box-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
 .branch-box-head h3 { margin: 0; font-size: 16px; }
