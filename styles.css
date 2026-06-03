@@ -307,16 +307,25 @@ label input, label select, label textarea { margin-top: 5px; }
 .branch-box-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
 .branch-box-head h3 { margin: 0; font-size: 16px; }
 .branch-empty { margin: 8px 0 2px; }
-.branch-goal { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); cursor: pointer; border-radius: 8px; }
+.branch-goal { padding: 12px 0; border-top: 1px solid var(--border); cursor: pointer; border-radius: 8px; }
 .branch-box-head + .branch-goal { border-top: none; }
 .branch-goal:hover { background: var(--surface-2); margin: 0 -10px; padding-left: 10px; padding-right: 10px; }
 .branch-goal:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.bg-donut { flex: 0 0 auto; }
-.bg-info { flex: 1 1 auto; min-width: 0; }
-.bg-name { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
-.bg-figures { font-size: 13px; margin-top: 6px; }
-.bg-figures b { font-size: 15px; }
-.bg-pct { float: right; color: var(--muted); font-weight: 600; }
+.bg-name { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+
+/* Two progress rings (Investment + Qualified) */
+.goal-circles { display: flex; gap: 18px; flex-wrap: wrap; }
+.circle-block { display: flex; align-items: center; gap: 10px; }
+.cb-info { line-height: 1.25; }
+.cb-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.cb-fig { font-size: 13px; }
+.cb-fig b { font-size: 15px; }
+
+/* Goal detail: two big donuts */
+.gd-donuts { display: flex; gap: 18px; flex: 0 0 auto; flex-wrap: wrap; }
+.gd-donut { text-align: center; }
+.gd-donut-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 2px; }
+.gd-donut-fig { font-size: 13px; font-weight: 600; margin-top: 2px; }
 
 .goal-progress-list { display: flex; flex-direction: column; gap: 16px; }
 .goal-progress-list .mini h5 { margin: 0 0 6px; font-size: 14px; display: flex; justify-content: space-between; }

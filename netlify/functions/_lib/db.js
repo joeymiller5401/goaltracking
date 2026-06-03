@@ -67,6 +67,9 @@ async function ensureSchema() {
     enc jsonb NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
   )`;
+  // Goals now carry two targets: an investment $ target (the existing `target`
+  // column) and a qualified-referrals count target.
+  await q`ALTER TABLE goals ADD COLUMN IF NOT EXISTS qualified_target numeric NOT NULL DEFAULT 0`;
   await q`CREATE TABLE IF NOT EXISTS app_settings (
     key text PRIMARY KEY,
     value jsonb NOT NULL

@@ -334,39 +334,45 @@
   // =========================================================================
   //  GOALS
   // =========================================================================
+  // A referral counts toward a goal if it's in the goal's branch and date range.
   function goalMatches(goal, ref) {
     if (goal.start && ref.date < goal.start) return false;
     if (goal.end && ref.date > goal.end) return false;
     if (goal.branch && (ref.branch || "").toLowerCase() !== goal.branch.toLowerCase()) return false;
-    if (goal.fundType === "initial") return ref.type === "initial";
-    if (goal.fundType === "additional") return ref.type === "additional";
-    return true; // total = initial + additional
-  }
-  function goalProgress(goal) {
-    const matched = referrals.filter((r) => r.status !== "declined" && goalMatches(goal, r));
-    const current = goal.metric === "count"
-      ? matched.length
-      : matched.reduce((s, r) => s + (Number(r.amount) || 0), 0);
-    const pct = goal.target > 0 ? Math.min(100, (current / goal.target) * 100) : 0;
-    return { current, pct };
-  }
-  function scopeLabel(goal) {
-    const b = goal.branch ? goal.branch : "All branches";
-    const t = goal.fundType === "initial" ? "Initial"
-      : goal.fundType === "additional" ? "Additional" : "Total";
-    return b + " · " + t;
-  }
-  function metricValue(goal, v) {
-    return goal.metric === "count" ? Math.round(v).toLocaleString("en-US") : fmtMoney0(v);
-  }
-
-  // ---- Goal detail (mini-dashboard) ---------------------------------------
-  function goalValueOf(goal, r) {
-    return goal.metric === "count" ? 1 : (Number(r.amount) || 0);
+    return true;
   }
   function goalMatched(goal) {
     return referrals.filter((r) => r.status !== "declined" && goalMatches(goal, r));
   }
+  // Two-target progress: investment $ (all matched) and qualified (# initial).
+  function goalProgress(goal) {
+    const matched = goalMatched(goal);
+    const amountCurrent = matched.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const qualifiedCurrent = matched.filter((r) => r.type === "initial").length;
+    const amountPct = goal.amountTarget > 0 ? Math.min(100, (amountCurrent / goal.amountTarget) * 100) : 0;
+    const qualifiedPct = goal.qualifiedTarget > 0 ? Math.min(100, (qualifiedCurrent / goal.qualifiedTarget) * 100) : 0;
+    return { matched, amountCurrent, qualifiedCurrent, amountPct, qualifiedPct };
+  }
+  function scopeLabel(goal) {
+    return goal.branch ? goal.branch : "All branches";
+  }
+  const fmtCount = (n) => Math.round(Number(n) || 0).toLocaleString("en-US");
+
+  // Two progress rings (Investment $ and Qualified referrals) for a goal.
+  function circleBlock(label, pct, cur, tgt) {
+    return `<div class="circle-block">${miniDonutSVG(pct)}
+      <div class="cb-info"><div class="cb-label">${esc(label)}</div>
+        <div class="cb-fig"><b>${esc(cur)}</b> <span class="muted">/ ${esc(tgt)}</span></div></div></div>`;
+  }
+  function goalCirclesHTML(goal) {
+    const p = goalProgress(goal);
+    const parts = [];
+    if (goal.amountTarget > 0) parts.push(circleBlock("Investment", p.amountPct, fmtMoney0(p.amountCurrent), fmtMoney0(goal.amountTarget)));
+    if (goal.qualifiedTarget > 0) parts.push(circleBlock("Qualified", p.qualifiedPct, fmtCount(p.qualifiedCurrent), fmtCount(goal.qualifiedTarget)));
+    return `<div class="goal-circles">${parts.join("") || '<span class="muted small">No targets set.</span>'}</div>`;
+  }
+
+  // ---- Goal detail (mini-dashboard) ---------------------------------------
 
   // Circular progress gauge.
   function donutSVG(pct) {
@@ -398,8 +404,8 @@
     if (x1 <= x0) x1 = x0 + 86400000;
 
     let cum = 0;
-    const pts = sorted.map((r) => { cum += goalValueOf(goal, r); return { x: t(r.date), y: cum }; });
-    const yMax = Math.max(goal.target, cum, 1);
+    const pts = sorted.map((r) => { cum += Number(r.amount) || 0; return { x: t(r.date), y: cum }; });
+    const yMax = Math.max(goal.amountTarget, cum, 1);
 
     const sx = (x) => padL + ((Math.min(Math.max(x, x0), x1) - x0) / (x1 - x0)) * innerW;
     const sy = (y) => padT + innerH - (y / yMax) * innerH;
@@ -413,9 +419,9 @@
     line += ` L ${sx(x1).toFixed(1)} ${sy(prevY).toFixed(1)}`;
     const area = line + ` L ${sx(x1).toFixed(1)} ${sy(0).toFixed(1)} L ${sx(x0).toFixed(1)} ${sy(0).toFixed(1)} Z`;
 
-    const ty = sy(goal.target);
+    const ty = sy(goal.amountTarget);
     const baseY = sy(0);
-    const fmtAxis = (v) => goal.metric === "count" ? Math.round(v).toLocaleString("en-US") : fmtMoney0(v);
+    const fmtAxis = (v) => fmtMoney0(v);
 
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" class="chart" preserveAspectRatio="xMidYMid meet">
       <defs>
@@ -427,7 +433,7 @@
       <line x1="${padL}" y1="${baseY}" x2="${W - padR}" y2="${baseY}" stroke="#e2e8f0"/>
       <line x1="${padL}" y1="${ty.toFixed(1)}" x2="${W - padR}" y2="${ty.toFixed(1)}"
         stroke="#15803d" stroke-width="1.5" stroke-dasharray="5 4"/>
-      <text x="${W - padR}" y="${(ty - 6).toFixed(1)}" text-anchor="end" class="chart-target">target ${esc(fmtAxis(goal.target))}</text>
+      <text x="${W - padR}" y="${(ty - 6).toFixed(1)}" text-anchor="end" class="chart-target">target ${esc(fmtAxis(goal.amountTarget))}</text>
       <path d="${area}" fill="url(#gfill)"/>
       <path d="${line}" fill="none" stroke="#1d4ed8" stroke-width="2.5"/>
       <text x="${padL - 8}" y="${baseY}" text-anchor="end" dominant-baseline="middle" class="chart-axis">0</text>
@@ -444,7 +450,7 @@
     const max = Math.max.apply(null, top.map((i) => i.value).concat([1]));
     const W = 680, labelW = 140, valW = 96, rowH = 30;
     const barMax = W - labelW - valW;
-    const fmtV = (v) => goal.metric === "count" ? Math.round(v).toLocaleString("en-US") : fmtMoney0(v);
+    const fmtV = (v) => fmtMoney0(v);
     let y = 0, rows = "";
     top.forEach((i) => {
       const bw = Math.max(2, (i.value / max) * barMax);
@@ -471,48 +477,36 @@
   function openGoalDetail(id) {
     const g = goals.find((x) => x.id === id);
     if (!g) return;
-    const matched = goalMatched(g);
-    const current = matched.reduce((s, r) => s + goalValueOf(g, r), 0);
-    const pctRaw = g.target > 0 ? (current / g.target) * 100 : 0;
-    const remaining = Math.max(0, g.target - current);
+    const p = goalProgress(g);
+    const matched = p.matched;
 
-    // Contributor breakdown: by branch for an all-branches goal, else by employee.
-    const byBranch = g.branch === "";
+    // Two donuts (only those with a target set).
+    const donuts = [];
+    if (g.amountTarget > 0) donuts.push(`<div class="gd-donut"><div class="gd-donut-label">Investment</div>${donutSVG(p.amountPct)}<div class="gd-donut-fig">${esc(fmtMoney0(p.amountCurrent))} / ${esc(fmtMoney0(g.amountTarget))}</div></div>`);
+    if (g.qualifiedTarget > 0) donuts.push(`<div class="gd-donut"><div class="gd-donut-label">Qualified referrals</div>${donutSVG(p.qualifiedPct)}<div class="gd-donut-fig">${esc(fmtCount(p.qualifiedCurrent))} / ${esc(fmtCount(g.qualifiedTarget))}</div></div>`);
+
+    // Contributor breakdown by employee (by $).
     const agg = {};
     matched.forEach((r) => {
-      const key = (byBranch ? r.branch : r.employee) || (byBranch ? "(no branch)" : "(unassigned)");
-      agg[key] = (agg[key] || 0) + goalValueOf(g, r);
+      const key = r.employee || "(unassigned)";
+      agg[key] = (agg[key] || 0) + (Number(r.amount) || 0);
     });
     const items = Object.entries(agg).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
 
-    // Pace/projection if there's a start date.
-    let paceTile = "";
-    if (g.start && current > 0) {
-      const day = 86400000;
-      const start = new Date(g.start + "T00:00:00").getTime();
-      const now = Date.now();
-      const elapsed = Math.max(1, Math.round((now - start) / day));
-      const pace = current / elapsed; // per day
-      if (g.end) {
-        const total = Math.max(1, Math.round((new Date(g.end + "T00:00:00").getTime() - start) / day));
-        const projected = pace * total;
-        paceTile = statTile("On-pace projection", metricValue(g, projected),
-          projected >= g.target ? "ahead of target 🚀" : "short of target");
-      } else {
-        paceTile = statTile("Pace", metricValue(g, pace * 30) + "/mo", "");
-      }
+    // Stat tiles.
+    const tiles = [];
+    if (g.amountTarget > 0) {
+      tiles.push(statTile("Investment remaining", fmtMoney0(Math.max(0, g.amountTarget - p.amountCurrent)), p.amountPct >= 100 ? "met 🎉" : ""));
     }
-
-    let daysTile = "";
+    if (g.qualifiedTarget > 0) {
+      tiles.push(statTile("Qualified remaining", fmtCount(Math.max(0, g.qualifiedTarget - p.qualifiedCurrent)), p.qualifiedPct >= 100 ? "met 🎉" : ""));
+    }
+    tiles.push(statTile("Referrals", fmtCount(matched.length), matched.filter((r) => r.type === "initial").length + " initial"));
+    if (matched.length) tiles.push(statTile("Avg / referral", fmtMoney0(p.amountCurrent / matched.length), ""));
     if (g.end) {
       const days = Math.ceil((new Date(g.end + "T00:00:00").getTime() - Date.now()) / 86400000);
-      daysTile = statTile("Days left", days >= 0 ? String(days) : "ended",
-        days >= 0 ? "until " + fmtDate(g.end) : "on " + fmtDate(g.end));
+      tiles.push(statTile("Days left", days >= 0 ? String(days) : "ended", days >= 0 ? "until " + fmtDate(g.end) : "on " + fmtDate(g.end)));
     }
-
-    const avgTile = g.metric === "amount" && matched.length
-      ? statTile("Avg / referral", fmtMoney0(current / matched.length), "")
-      : "";
 
     const range = [g.start ? fmtDate(g.start) : null, g.end ? fmtDate(g.end) : null].filter(Boolean).join(" – ");
 
@@ -520,28 +514,23 @@
       <div class="gd-head">
         <div>
           <h3>${esc(g.name)}</h3>
-          <div class="goal-meta">${esc(scopeLabel(g))}${range ? " · " + esc(range) : ""} · ${g.metric === "count" ? "count goal" : "amount goal"}</div>
+          <div class="goal-meta">${esc(scopeLabel(g))}${range ? " · " + esc(range) : ""}</div>
         </div>
         <button class="btn" data-act="edit-from-detail" data-id="${esc(g.id)}">Edit goal</button>
       </div>
 
       <div class="gd-top">
-        <div class="gd-donut">${donutSVG(pctRaw)}</div>
-        <div class="gd-tiles">
-          ${statTile("Current", metricValue(g, current), matched.length + " referral" + (matched.length === 1 ? "" : "s"))}
-          ${statTile("Target", metricValue(g, g.target), "")}
-          ${statTile("Remaining", metricValue(g, remaining), pctRaw >= 100 ? "goal met 🎉" : "")}
-          ${avgTile}${daysTile}${paceTile}
-        </div>
+        <div class="gd-donuts">${donuts.join("")}</div>
+        <div class="gd-tiles">${tiles.join("")}</div>
       </div>
 
       <div class="gd-section">
-        <h4>Progress over time</h4>
+        <h4>Investment over time</h4>
         ${matched.length ? lineChartSVG(g, matched) : `<p class="muted small">No referrals counted toward this goal yet.</p>`}
       </div>
 
       <div class="gd-section">
-        <h4>${byBranch ? "By branch" : "Top contributors"}</h4>
+        <h4>Top contributors</h4>
         ${barChartSVG(g, items)}
       </div>`;
 
@@ -553,8 +542,6 @@
     $("#goals-empty").hidden = goals.length !== 0;
     wrap.innerHTML = goals
       .map((g) => {
-        const { current, pct } = goalProgress(g);
-        const done = pct >= 100;
         const range = [g.start ? fmtDate(g.start) : null, g.end ? fmtDate(g.end) : null]
           .filter(Boolean).join(" – ");
         return `
@@ -569,11 +556,7 @@
               <button class="link-btn del" data-act="del-goal">Delete</button>
             </div>
           </div>
-          <div class="goal-figures">
-            <b>${esc(metricValue(g, current))}</b> <span class="muted">/ ${esc(metricValue(g, g.target))}</span>
-          </div>
-          <div class="progress ${done ? "done" : ""}"><span style="width:${pct}%"></span></div>
-          <div class="progress-label"><span>${pct.toFixed(0)}%</span><span>${done ? "Goal met 🎉" : "in progress"}</span></div>
+          ${goalCirclesHTML(g)}
         </div>`;
       })
       .join("");
@@ -614,7 +597,6 @@
     $("#goal-modal-title").textContent = editing ? "Edit goal" : "New goal";
     $("#goal-id").value = editing ? editing.id : "";
     $("#goal-name").value = editing ? editing.name : "";
-    $("#goal-metric").value = editing ? editing.metric : "amount";
     if (isAdmin()) {
       $("#goal-branch").disabled = false;
       $("#goal-branch").value = editing ? editing.branch || "" : "";
@@ -622,8 +604,8 @@
       $("#goal-branch").value = (Api.currentUser() || {}).branch || "";
       $("#goal-branch").disabled = true;
     }
-    $("#goal-fundtype").value = editing ? editing.fundType || "total" : "total";
-    $("#goal-target").value = editing ? editing.target : "";
+    $("#goal-amount-target").value = editing && editing.amountTarget ? editing.amountTarget : "";
+    $("#goal-qualified-target").value = editing && editing.qualifiedTarget ? editing.qualifiedTarget : "";
     $("#goal-start").value = editing ? editing.start || "" : "";
     $("#goal-end").value = editing ? editing.end || "" : "";
     goalModal.hidden = false;
@@ -641,10 +623,9 @@
     const id = $("#goal-id").value;
     const data = {
       name: $("#goal-name").value.trim(),
-      metric: $("#goal-metric").value,
       branch: isAdmin() ? $("#goal-branch").value : ((Api.currentUser() || {}).branch || ""),
-      fundType: $("#goal-fundtype").value,
-      target: parseFloat($("#goal-target").value) || 0,
+      amountTarget: parseFloat($("#goal-amount-target").value) || 0,
+      qualifiedTarget: parseFloat($("#goal-qualified-target").value) || 0,
       start: $("#goal-start").value || "",
       end: $("#goal-end").value || "",
     };
@@ -684,18 +665,9 @@
   }
 
   function goalRowHTML(g) {
-    const { current, pct } = goalProgress(g);
-    const done = pct >= 100;
-    const t = g.fundType === "initial" ? "Initial" : g.fundType === "additional" ? "Additional" : "Total";
-    const tag = t + (g.metric === "count" ? " · count" : "");
     return `<div class="branch-goal" data-goal-id="${esc(g.id)}" role="button" tabindex="0">
-      <div class="bg-donut">${miniDonutSVG(pct)}</div>
-      <div class="bg-info">
-        <div class="bg-name">${esc(g.name)} <span class="muted small">· ${esc(tag)}</span></div>
-        <div class="progress ${done ? "done" : ""}"><span style="width:${pct}%"></span></div>
-        <div class="bg-figures"><b>${esc(metricValue(g, current))}</b> <span class="muted">/ ${esc(metricValue(g, g.target))}</span>
-          <span class="bg-pct">${done ? "✓ met" : pct.toFixed(0) + "%"}</span></div>
-      </div>
+      <div class="bg-name">${esc(g.name)}</div>
+      ${goalCirclesHTML(g)}
     </div>`;
   }
 

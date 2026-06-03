@@ -226,24 +226,15 @@
           <input type="text" id="goal-name" required placeholder="e.g. Q2 referral target" />
         </label>
         <div class="form-grid">
-          <label>Measure
-            <select id="goal-metric">
-              <option value="amount">Total amount ($)</option>
-              <option value="count">Number of referrals</option>
-            </select>
-          </label>
           <label>Branch
             <select id="goal-branch"></select>
           </label>
-          <label>Funds
-            <select id="goal-fundtype">
-              <option value="total">Total (initial + additional)</option>
-              <option value="initial">Initial only</option>
-              <option value="additional">Additional only</option>
-            </select>
+          <label class="spacer-label"></label>
+          <label>Investment $ target
+            <input type="number" id="goal-amount-target" step="0.01" min="0" placeholder="e.g. 2000000" />
           </label>
-          <label>Target
-            <input type="number" id="goal-target" step="0.01" min="0" required />
+          <label>Qualified referrals target
+            <input type="number" id="goal-qualified-target" step="1" min="0" placeholder="e.g. 25" />
           </label>
           <label>Start date
             <input type="date" id="goal-start" />
@@ -252,6 +243,7 @@
             <input type="date" id="goal-end" />
           </label>
         </div>
+        <p class="hint">Set at least one target. <b>Investment $</b> = total of the branch's referrals (initial + additional). <b>Qualified</b> = number of initial sales.</p>
         <p class="auth-error" id="goal-error" hidden></p>
         <div class="modal-actions">
           <button type="button" class="btn" id="goal-cancel">Cancel</button>

@@ -1,8 +1,10 @@
 /* Goals CRUD with branch access control.
  *  - Admins manage goals for any branch (or "all branches").
  *  - Branch users only see/manage goals for their own branch.
- * The `scope` column stores the fund type (total/initial/additional); goal
- * name and branch are encrypted in the `enc` blob.
+ * A goal carries two targets: an investment $ target (`target` column) and a
+ * qualified-referrals count target (`qualified_target`). Goal name and branch
+ * are encrypted in the `enc` blob. (`metric`/`scope` are legacy columns kept
+ * for compatibility.)
  */
 const { sql, ensureSchema, getAccount } = require("./_lib/db");
 const { requireUser } = require("./_lib/auth");
@@ -16,9 +18,8 @@ function rowToGoal(r) {
     id: r.id,
     name: d.name || "",
     branch: d.branch || "",
-    fundType: ["total", "initial", "additional"].includes(r.scope) ? r.scope : "total",
-    metric: r.metric,
-    target: Number(r.target) || 0,
+    amountTarget: Number(r.target) || 0,
+    qualifiedTarget: Number(r.qualified_target) || 0,
     start: r.start_date || "",
     end: r.end_date || "",
   };
@@ -26,7 +27,7 @@ function rowToGoal(r) {
 
 async function fetchRow(q, id) {
   const rows = await q`
-    SELECT id, metric, scope, target,
+    SELECT id, target, qualified_target,
            to_char(start_date, 'YYYY-MM-DD') AS start_date,
            to_char(end_date, 'YYYY-MM-DD') AS end_date,
            enc, created_at
@@ -36,13 +37,13 @@ async function fetchRow(q, id) {
 
 function validate(b) {
   if (!String(b.name || "").trim()) return { error: "Goal name is required" };
-  const metric = b.metric === "count" ? "count" : "amount";
-  const scope = ["total", "initial", "additional"].includes(b.fundType) ? b.fundType : "total";
-  const target = Number(b.target);
-  if (!(target >= 0)) return { error: "A valid target is required" };
+  const amountTarget = Number(b.amountTarget) || 0;
+  const qualifiedTarget = Number(b.qualifiedTarget) || 0;
+  if (amountTarget < 0 || qualifiedTarget < 0) return { error: "Targets cannot be negative" };
+  if (amountTarget <= 0 && qualifiedTarget <= 0) return { error: "Set at least one target" };
   const start = b.start ? String(b.start).slice(0, 10) : null;
   const end = b.end ? String(b.end).slice(0, 10) : null;
-  return { metric, scope, target, start, end };
+  return { amountTarget, qualifiedTarget, start, end };
 }
 
 exports.handler = async (event) => {
@@ -60,7 +61,7 @@ exports.handler = async (event) => {
 
     if (method === "GET") {
       const rows = await q`
-        SELECT id, metric, scope, target,
+        SELECT id, target, qualified_target,
                to_char(start_date, 'YYYY-MM-DD') AS start_date,
                to_char(end_date, 'YYYY-MM-DD') AS end_date,
                enc, created_at
@@ -89,8 +90,8 @@ exports.handler = async (event) => {
 
       if (method === "POST") {
         const ins = await q`
-          INSERT INTO goals (owner_id, metric, scope, target, start_date, end_date, enc)
-          VALUES (${user.id}, ${v.metric}, ${v.scope}, ${v.target}, ${v.start}, ${v.end}, ${enc}::jsonb)
+          INSERT INTO goals (owner_id, metric, scope, target, qualified_target, start_date, end_date, enc)
+          VALUES (${user.id}, 'amount', 'total', ${v.amountTarget}, ${v.qualifiedTarget}, ${v.start}, ${v.end}, ${enc}::jsonb)
           RETURNING id`;
         return json(200, { goal: await fetchRow(q, ins[0].id) });
       }
@@ -102,7 +103,7 @@ exports.handler = async (event) => {
 
       const upd = await q`
         UPDATE goals
-        SET metric = ${v.metric}, scope = ${v.scope}, target = ${v.target},
+        SET target = ${v.amountTarget}, qualified_target = ${v.qualifiedTarget},
             start_date = ${v.start}, end_date = ${v.end}, enc = ${enc}::jsonb
         WHERE id = ${id}
         RETURNING id`;
