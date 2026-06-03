@@ -663,7 +663,7 @@
       <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="8"
         stroke-linecap="round" stroke-dasharray="${dash.toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>
       <text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="middle"
-        style="font-size:15px;font-weight:800;fill:#0f172a">${Math.round(pct)}</text>
+        style="font-size:13px;font-weight:800;fill:#0f172a">${Math.round(pct)}%</text>
     </svg>`;
   }
 
