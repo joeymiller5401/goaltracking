@@ -833,8 +833,12 @@
     const typeSel = $("#rep-type").value;
     const statusSel = $("#rep-status").value;
     const period = $("#rep-period").value;
+    const from = $("#rep-from").value, to = $("#rep-to").value;
     return referrals.filter((r) => {
-      if (!inPeriod(r, period)) return false;
+      if (period === "custom") {
+        if (from && (r.date || "") < from) return false;
+        if (to && (r.date || "") > to) return false;
+      } else if (!inPeriod(r, period)) return false;
       if (branchSel && branchSel !== "all" && (r.branch || "") !== branchSel) return false;
       if (advisorSel !== "all" && (r.advisor || "") !== advisorSel) return false;
       if (typeSel !== "all" && r.type !== typeSel) return false;
@@ -854,6 +858,9 @@
 
   function renderReports() {
     if (!$("#rep-groupby")) return;
+    const custom = $("#rep-period").value === "custom";
+    $("#rep-from-wrap").hidden = !custom;
+    $("#rep-to-wrap").hidden = !custom;
     const dim = $("#rep-groupby").value;
     const rows = reportFilteredReferrals();
     const sum = (arr) => arr.reduce((s, r) => s + (Number(r.amount) || 0), 0);
@@ -915,7 +922,7 @@
     reportState.dim = dim; reportState.dimLabel = dimLabel; reportState.entries = entries; reportState.tot = tot;
   }
 
-  ["rep-groupby", "rep-branch", "rep-advisor", "rep-type", "rep-status", "rep-period"].forEach((id) => {
+  ["rep-groupby", "rep-branch", "rep-advisor", "rep-type", "rep-status", "rep-period", "rep-from", "rep-to"].forEach((id) => {
     const el = $("#" + id);
     if (el) el.addEventListener("change", renderReports);
   });
