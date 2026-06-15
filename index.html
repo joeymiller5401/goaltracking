@@ -81,6 +81,7 @@
         <button class="tab active" data-tab="dashboard">Dashboard</button>
         <button class="tab" data-tab="referrals">Referrals</button>
         <button class="tab" data-tab="goals">Goals</button>
+        <button class="tab" data-tab="reports">Reports</button>
         <button class="tab" data-tab="settings">Settings</button>
       </nav>
     </header>
@@ -104,7 +105,7 @@
         </div>
 
         <div class="toolbar">
-          <input type="search" id="ref-search" placeholder="Search employee, client, branch…" />
+          <input type="search" id="ref-search" placeholder="Search employee, advisor, client, branch…" />
           <select id="ref-type-filter">
             <option value="all">All types</option>
             <option value="initial">Initial</option>
@@ -127,6 +128,7 @@
             <tr>
               <th data-sort="date">Date</th>
               <th data-sort="employee">Employee</th>
+              <th data-sort="advisor">Advisor</th>
               <th data-sort="branch">Branch</th>
               <th data-sort="client">Client</th>
               <th data-sort="type">Type</th>
@@ -149,6 +151,68 @@
         </div>
         <div id="goals-list" class="goals-list"></div>
         <p class="empty" id="goals-empty" hidden>No goals yet. Set a target to start tracking progress.</p>
+      </section>
+
+      <!-- REPORTS -->
+      <section class="panel" id="tab-reports">
+        <div class="panel-head">
+          <h2>Reports</h2>
+          <button class="btn" id="report-export">Export report (CSV)</button>
+        </div>
+
+        <div class="report-controls">
+          <label>Group by
+            <select id="rep-groupby">
+              <option value="branch">Branch</option>
+              <option value="advisor">Advisor</option>
+              <option value="employee">Referring employee</option>
+              <option value="month">Month</option>
+              <option value="type">Fund type</option>
+            </select>
+          </label>
+          <label id="rep-branch-wrap">Branch
+            <select id="rep-branch"><option value="all">All branches</option></select>
+          </label>
+          <label>Advisor
+            <select id="rep-advisor"><option value="all">All advisors</option></select>
+          </label>
+          <label>Fund type
+            <select id="rep-type">
+              <option value="all">All</option>
+              <option value="initial">Initial</option>
+              <option value="additional">Additional</option>
+            </select>
+          </label>
+          <label>Status
+            <select id="rep-status">
+              <option value="active">Active (excl. declined)</option>
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="credited">Credited</option>
+              <option value="declined">Declined</option>
+            </select>
+          </label>
+          <label>Period
+            <select id="rep-period">
+              <option value="all">All time</option>
+              <option value="ytd">Year to date</option>
+              <option value="qtd">Quarter to date</option>
+              <option value="mtd">Month to date</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="cards" id="report-cards"></div>
+
+        <div class="card-block">
+          <h3 id="report-table-title">By branch</h3>
+          <table class="data" id="report-table">
+            <thead></thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+          <p class="empty" id="report-empty" hidden>No referrals match these filters.</p>
+        </div>
       </section>
 
       <!-- SETTINGS -->
@@ -194,6 +258,11 @@
           <label>Referring employee
             <input type="text" id="ref-employee" list="employee-list" required placeholder="Who referred it" />
             <datalist id="employee-list"></datalist>
+          </label>
+          <label>Referred to advisor
+            <select id="ref-advisor" required>
+              <option value="">Select advisor…</option>
+            </select>
           </label>
           <label>Branch
             <select id="ref-branch" required>

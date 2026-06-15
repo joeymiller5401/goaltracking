@@ -19,6 +19,7 @@ function rowToReferral(r) {
     type: r.type,
     status: r.status,
     employee: d.employee || "",
+    advisor: d.advisor || "",
     branch: d.branch || "",
     client: d.client || "",
     amount: Number(d.amount) || 0,
@@ -86,7 +87,7 @@ exports.handler = async (event) => {
       if (isAdmin && !BRANCHES.includes(branch)) return json(400, { error: "Unknown branch" });
 
       const enc = JSON.stringify(
-        encrypt({ employee: b.employee, branch, client: b.client, amount: v.amount, notes: b.notes })
+        encrypt({ employee: b.employee, advisor: b.advisor || "", branch, client: b.client, amount: v.amount, notes: b.notes })
       );
 
       if (method === "POST") {

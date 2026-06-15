@@ -12,6 +12,10 @@
     "East Fishkill", "Arlington", "Fishkill", "Goshen", "Warwick", "Newburgh",
   ];
 
+  // ---- Advisors ------------------------------------------------------------
+  // The asset-management advisors clients can be referred to.
+  const ADVISORS = ["Brian Daly", "Joe Pillot", "Anthony Piccolino", "Jason Netrosio"];
+
   // ---- In-memory state (mirrors the server) --------------------------------
   let referrals = [];
   let goals = [];
@@ -84,6 +88,8 @@
       (u.name || u.email || "") + (admin ? " · Admin" : (u.branch ? " · " + u.branch : ""));
     $("#dash-title").textContent = admin ? "Branch goals" : ((u.branch || "") + " goals");
     $("#admin-panel").hidden = !admin;
+    // Branch users see only their branch, so the report branch filter is hidden.
+    $("#rep-branch-wrap").hidden = !admin;
     if (admin) renderBranchCodes();
   }
 
@@ -172,13 +178,19 @@
     $$(".tab").forEach((t) => t.classList.toggle("active", t === btn));
     $$(".panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + tab));
     if (tab === "dashboard") renderDashboard();
+    if (tab === "reports") renderReports();
   });
 
-  // ---- Branch & employee option lists --------------------------------------
+  // ---- Branch, advisor & employee option lists -----------------------------
   function populateBranchSelects() {
-    const opts = BRANCHES.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
-    $("#ref-branch").innerHTML = `<option value="">Select branch…</option>` + opts;
-    $("#goal-branch").innerHTML = `<option value="">All branches</option>` + opts;
+    const branchOpts = BRANCHES.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
+    $("#ref-branch").innerHTML = `<option value="">Select branch…</option>` + branchOpts;
+    $("#goal-branch").innerHTML = `<option value="">All branches</option>` + branchOpts;
+    $("#rep-branch").innerHTML = `<option value="all">All branches</option>` + branchOpts;
+
+    const advisorOpts = ADVISORS.map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    $("#ref-advisor").innerHTML = `<option value="">Select advisor…</option>` + advisorOpts;
+    $("#rep-advisor").innerHTML = `<option value="all">All advisors</option>` + advisorOpts;
   }
   function refreshDatalists() {
     const employees = [...new Set(referrals.map((r) => r.employee).filter(Boolean))].sort();
@@ -195,7 +207,7 @@
     const q = refState.search.trim().toLowerCase();
     if (q) {
       rows = rows.filter((r) =>
-        [r.employee, r.client, r.branch, r.notes].some((v) => (v || "").toLowerCase().includes(q))
+        [r.employee, r.advisor, r.client, r.branch, r.notes].some((v) => (v || "").toLowerCase().includes(q))
       );
     }
     if (refState.type !== "all") rows = rows.filter((r) => r.type === refState.type);
@@ -225,6 +237,7 @@
       <tr data-id="${esc(r.id)}">
         <td>${esc(fmtDate(r.date))}</td>
         <td>${esc(r.employee)}</td>
+        <td>${esc(r.advisor || "")}</td>
         <td>${esc(r.branch || "")}</td>
         <td>${esc(r.client)}</td>
         <td><span class="badge ${esc(r.type)}">${capitalize(r.type)}</span></td>
@@ -282,6 +295,7 @@
     $("#ref-date").value = editing ? editing.date : todayISO();
     $("#ref-type").value = editing ? editing.type : "initial";
     $("#ref-employee").value = editing ? editing.employee : "";
+    $("#ref-advisor").value = editing ? editing.advisor || "" : "";
     if (isAdmin()) {
       $("#ref-branch").disabled = false;
       $("#ref-branch").value = editing ? editing.branch || "" : "";
@@ -311,6 +325,7 @@
       date: $("#ref-date").value,
       type: $("#ref-type").value,
       employee: $("#ref-employee").value.trim(),
+      advisor: $("#ref-advisor").value,
       branch: isAdmin() ? $("#ref-branch").value : ((Api.currentUser() || {}).branch || ""),
       client: $("#ref-client").value.trim(),
       amount: parseFloat($("#ref-amount").value) || 0,
@@ -802,9 +817,132 @@
   });
 
   // =========================================================================
+  //  REPORTS (customizable)
+  // =========================================================================
+  const reportState = { dim: "branch", dimLabel: "Branch", entries: [], tot: null };
+  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function monthLabel(ym) {
+    const [y, m] = String(ym).split("-").map(Number);
+    return (MONTH_NAMES[m - 1] || ym) + " " + y;
+  }
+
+  function reportFilteredReferrals() {
+    const admin = isAdmin();
+    const branchSel = admin ? $("#rep-branch").value : ((Api.currentUser() || {}).branch || "");
+    const advisorSel = $("#rep-advisor").value;
+    const typeSel = $("#rep-type").value;
+    const statusSel = $("#rep-status").value;
+    const period = $("#rep-period").value;
+    return referrals.filter((r) => {
+      if (!inPeriod(r, period)) return false;
+      if (branchSel && branchSel !== "all" && (r.branch || "") !== branchSel) return false;
+      if (advisorSel !== "all" && (r.advisor || "") !== advisorSel) return false;
+      if (typeSel !== "all" && r.type !== typeSel) return false;
+      if (statusSel === "active") { if (r.status === "declined") return false; }
+      else if (statusSel !== "all") { if (r.status !== statusSel) return false; }
+      return true;
+    });
+  }
+
+  function reportGroupKey(r, dim) {
+    if (dim === "advisor") return r.advisor || "(unassigned)";
+    if (dim === "employee") return r.employee || "(unassigned)";
+    if (dim === "type") return capitalize(r.type);
+    if (dim === "month") return (r.date || "").slice(0, 7);
+    return r.branch || "(no branch)";
+  }
+
+  function renderReports() {
+    if (!$("#rep-groupby")) return;
+    const dim = $("#rep-groupby").value;
+    const rows = reportFilteredReferrals();
+    const sum = (arr) => arr.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const initial = rows.filter((r) => r.type === "initial");
+    const additional = rows.filter((r) => r.type === "additional");
+
+    const cards = [
+      { label: "Total investment", value: fmtMoney0(sum(rows)) },
+      { label: "Initial funds", value: fmtMoney0(sum(initial)) },
+      { label: "Additional funds", value: fmtMoney0(sum(additional)) },
+      { label: "Qualified referrals", value: fmtCount(initial.length) },
+      { label: "Referrals", value: fmtCount(rows.length) },
+    ];
+    $("#report-cards").innerHTML = cards
+      .map((c) => `<div class="metric"><div class="label">${esc(c.label)}</div><div class="value">${esc(c.value)}</div></div>`)
+      .join("");
+
+    const groups = {};
+    rows.forEach((r) => {
+      const k = reportGroupKey(r, dim);
+      const g = groups[k] || (groups[k] = { count: 0, qualified: 0, initial: 0, additional: 0 });
+      g.count++;
+      if (r.type === "initial") { g.initial += Number(r.amount) || 0; g.qualified++; }
+      else g.additional += Number(r.amount) || 0;
+    });
+    let entries = Object.entries(groups);
+    if (dim === "month") entries.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    else entries.sort((a, b) => (b[1].initial + b[1].additional) - (a[1].initial + a[1].additional));
+
+    const dimLabel = { branch: "Branch", advisor: "Advisor", employee: "Employee", month: "Month", type: "Fund type" }[dim];
+    $("#report-table-title").textContent = "By " + dimLabel.toLowerCase();
+    $("#report-empty").hidden = entries.length !== 0;
+
+    const fmtKey = (k) => (dim === "month" ? monthLabel(k) : k);
+    $("#report-table thead").innerHTML =
+      `<tr><th>${esc(dimLabel)}</th><th class="num">Referrals</th><th class="num">Qualified</th>` +
+      `<th class="num">Initial $</th><th class="num">Additional $</th><th class="num">Total $</th></tr>`;
+    $("#report-table tbody").innerHTML = entries
+      .map(([k, v]) => `<tr>
+        <td>${esc(fmtKey(k))}</td>
+        <td class="num">${v.count}</td>
+        <td class="num">${v.qualified}</td>
+        <td class="num">${esc(fmtMoney0(v.initial))}</td>
+        <td class="num">${esc(fmtMoney0(v.additional))}</td>
+        <td class="num">${esc(fmtMoney0(v.initial + v.additional))}</td>
+      </tr>`)
+      .join("");
+    const tot = rows.reduce((a, r) => {
+      if (r.type === "initial") { a.initial += Number(r.amount) || 0; a.qualified++; }
+      else a.additional += Number(r.amount) || 0;
+      a.count++; return a;
+    }, { count: 0, qualified: 0, initial: 0, additional: 0 });
+    $("#report-table tfoot").innerHTML = entries.length
+      ? `<tr><th>Total</th><th class="num">${tot.count}</th><th class="num">${tot.qualified}</th>` +
+        `<th class="num">${esc(fmtMoney0(tot.initial))}</th><th class="num">${esc(fmtMoney0(tot.additional))}</th>` +
+        `<th class="num">${esc(fmtMoney0(tot.initial + tot.additional))}</th></tr>`
+      : "";
+
+    reportState.dim = dim; reportState.dimLabel = dimLabel; reportState.entries = entries; reportState.tot = tot;
+  }
+
+  ["rep-groupby", "rep-branch", "rep-advisor", "rep-type", "rep-status", "rep-period"].forEach((id) => {
+    const el = $("#" + id);
+    if (el) el.addEventListener("change", renderReports);
+  });
+
+  $("#report-export").addEventListener("click", () => {
+    const cols = [reportState.dimLabel, "Referrals", "Qualified", "Initial $", "Additional $", "Total $"];
+    const lines = [cols.map(csvCell).join(",")];
+    reportState.entries.forEach(([k, v]) => {
+      const key = reportState.dim === "month" ? monthLabel(k) : k;
+      lines.push([key, v.count, v.qualified, v.initial, v.additional, v.initial + v.additional].map(csvCell).join(","));
+    });
+    if (reportState.tot) {
+      const t = reportState.tot;
+      lines.push(["Total", t.count, t.qualified, t.initial, t.additional, t.initial + t.additional].map(csvCell).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "report-" + reportState.dim + "-" + todayISO() + ".csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // =========================================================================
   //  CSV export / import
   // =========================================================================
-  const CSV_COLS = ["date", "type", "employee", "branch", "client", "amount", "status", "notes"];
+  const CSV_COLS = ["date", "type", "employee", "advisor", "branch", "client", "amount", "status", "notes"];
 
   function csvCell(v) {
     const s = String(v == null ? "" : v);
@@ -863,6 +1001,7 @@
         date: get("date") || todayISO(),
         type: get("type").toLowerCase() === "additional" ? "additional" : "initial",
         employee: get("employee"),
+        advisor: get("advisor"),
         branch: get("branch"),
         client: get("client"),
         amount: parseFloat(get("amount")) || 0,
