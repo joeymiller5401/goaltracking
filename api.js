@@ -67,5 +67,6 @@ window.Api = (function () {
 
     listAccounts() { return req("/accounts").then((r) => r.accounts); },
     setAccountActive(id, active) { return req("/accounts", "POST", { id, active }); },
+    deleteAccount(id) { return req("/accounts?id=" + encodeURIComponent(id), "DELETE"); },
   };
 })();

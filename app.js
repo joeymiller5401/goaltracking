@@ -897,7 +897,8 @@
           const isMe = a.id === meId;
           const action = isMe
             ? `<span class="muted small">you</span>`
-            : `<button class="link-btn ${a.active ? "del" : ""}" data-act="toggle" data-active="${a.active ? "1" : "0"}">${a.active ? "Deactivate" : "Reactivate"}</button>`;
+            : `<button class="link-btn ${a.active ? "del" : ""}" data-act="toggle" data-active="${a.active ? "1" : "0"}">${a.active ? "Deactivate" : "Reactivate"}</button>
+               <button class="link-btn del" data-act="delete">Delete</button>`;
           return `<tr data-id="${esc(a.id)}" class="${a.active ? "" : "row-disabled"}">
             <td>${esc(a.name || "—")}</td>
             <td class="muted small">${esc(a.email)}</td>
@@ -915,16 +916,26 @@
   }
 
   $("#accounts-table tbody").addEventListener("click", async (e) => {
-    const btn = e.target.closest('[data-act="toggle"]');
+    const btn = e.target.closest("[data-act]");
     if (!btn) return;
     const tr = e.target.closest("tr");
     const id = tr.dataset.id;
-    const currentlyActive = btn.dataset.active === "1";
     const name = tr.firstElementChild.textContent;
-    if (!confirm(`${currentlyActive ? "Deactivate" : "Reactivate"} ${name}'s account?`)) return;
     try {
-      await Api.setAccountActive(id, !currentlyActive);
-      renderAccounts();
+      if (btn.dataset.act === "toggle") {
+        const currentlyActive = btn.dataset.active === "1";
+        if (!confirm(`${currentlyActive ? "Deactivate" : "Reactivate"} ${name}'s account?`)) return;
+        await Api.setAccountActive(id, !currentlyActive);
+        renderAccounts();
+      } else if (btn.dataset.act === "delete") {
+        if (!confirm(`Delete ${name}'s account?\n\nTheir referrals are kept (the "Added by" attribution is removed). This cannot be undone.`)) return;
+        await Api.deleteAccount(id);
+        // Refresh referrals so cleared attribution shows, then re-render.
+        try { referrals = await Api.listReferrals(); } catch (e2) { /* ignore */ }
+        renderAccounts();
+        renderReferrals();
+        renderDashboard();
+      }
     } catch (err) { alert("Could not update account: " + err.message); }
   });
 

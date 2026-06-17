@@ -51,6 +51,17 @@ exports.handler = async (event) => {
       return json(200, { id, active });
     }
 
+    if (event.httpMethod === "DELETE") {
+      const id = event.queryStringParameters && event.queryStringParameters.id;
+      if (!id) return json(400, { error: "Missing id" });
+      if (id === me.id) return json(400, { error: "You can't delete your own account" });
+      // referrals/goals reference users with ON DELETE SET NULL, so their data
+      // is preserved (only the "added by" attribution clears).
+      const del = await q`DELETE FROM users WHERE id = ${id} RETURNING id`;
+      if (!del.length) return json(404, { error: "Account not found" });
+      return json(200, { ok: true });
+    }
+
     return json(405, { error: "Method not allowed" });
   } catch (e) {
     console.error("accounts error", e);
