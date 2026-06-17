@@ -101,6 +101,8 @@
     $("#dash-title").textContent = branches.length > 1 ? "Branch goals" : ((branches[0] || "") + " goals");
     $("#admin-panel").hidden = !admin;
     $("#advisor-panel").hidden = !admin;
+    // Goals are admin-managed; hide the Goals tab from advisors/branch users.
+    $$(".tab").forEach((t) => { if (t.dataset.tab === "goals") t.hidden = !admin; });
     // Single-branch users have nothing to filter, so hide the report branch filter.
     $("#rep-branch-wrap").hidden = branches.length <= 1;
     populateBranchSelects();
@@ -551,7 +553,7 @@
           <h3>${esc(g.name)}</h3>
           <div class="goal-meta">${esc(scopeLabel(g))}${range ? " · " + esc(range) : ""}</div>
         </div>
-        <button class="btn" data-act="edit-from-detail" data-id="${esc(g.id)}">Edit goal</button>
+        ${isAdmin() ? `<button class="btn" data-act="edit-from-detail" data-id="${esc(g.id)}">Edit goal</button>` : ""}
       </div>
 
       <div class="gd-top">

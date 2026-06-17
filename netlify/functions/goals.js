@@ -74,6 +74,7 @@ exports.handler = async (event) => {
     }
 
     if (method === "POST" || method === "PUT") {
+      if (user.role !== "admin") return json(403, { error: "Only admins can manage goals" });
       let b;
       try { b = JSON.parse(event.body || "{}"); } catch (e) { return json(400, { error: "Invalid JSON" }); }
       const v = validate(b);
@@ -114,6 +115,7 @@ exports.handler = async (event) => {
     }
 
     if (method === "DELETE") {
+      if (user.role !== "admin") return json(403, { error: "Only admins can manage goals" });
       if (!id) return json(400, { error: "Missing id" });
       if (allowed !== null) {
         const current = await fetchRow(q, id);
