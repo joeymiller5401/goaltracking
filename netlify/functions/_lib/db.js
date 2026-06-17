@@ -44,6 +44,7 @@ async function ensureSchema() {
   await q`ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'user'`;
   await q`ALTER TABLE users ADD COLUMN IF NOT EXISTS branch text`;
   await q`ALTER TABLE users ADD COLUMN IF NOT EXISTS advisor text`;
+  await q`ALTER TABLE users ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true`;
   // Invariant: an account scoped to neither a branch nor an advisor is an admin.
   // This promotes pre-existing (pre-roles) accounts to admin without touching
   // branch users (have a branch) or advisors (have an advisor).
@@ -103,8 +104,10 @@ async function ensureSchema() {
 
 // Authoritative role/branch for a user id — looked up per request so that
 // access reflects the current database state, not a possibly-stale token.
+// Returns the account only if it exists and is active, so a deactivated user
+// loses access immediately (not just at next login).
 async function getAccount(id) {
-  const rows = await sql()`SELECT id, email, name, role, branch, advisor FROM users WHERE id = ${id}`;
+  const rows = await sql()`SELECT id, email, name, role, branch, advisor FROM users WHERE id = ${id} AND active = true`;
   return rows[0] || null;
 }
 

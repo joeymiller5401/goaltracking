@@ -64,5 +64,8 @@ window.Api = (function () {
 
     listAdvisorCodes() { return req("/advisor-codes").then((r) => r.codes); },
     regenAdvisorCode(advisor) { return req("/advisor-codes", "POST", { advisor }); },
+
+    listAccounts() { return req("/accounts").then((r) => r.accounts); },
+    setAccountActive(id, active) { return req("/accounts", "POST", { id, active }); },
   };
 })();

@@ -176,6 +176,7 @@ table.data tfoot th { border-top: 2px solid var(--border); font-weight: 700; col
 .badge.declined { background: var(--red-soft); color: var(--red); }
 .badge.admin-badge { background: var(--bg); color: #fff; vertical-align: middle; margin-left: 6px; }
 
+tr.row-disabled td { opacity: .5; }
 code.code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: var(--surface-2);

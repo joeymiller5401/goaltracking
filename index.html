@@ -226,6 +226,17 @@
       <section class="panel" id="tab-settings">
         <div class="panel-head"><h2>Settings</h2></div>
 
+        <div class="card-block" id="accounts-panel" hidden>
+          <h3>Accounts <span class="badge admin-badge">Admin</span></h3>
+          <p class="muted small">Everyone who has signed up. Deactivate to block sign-in and access immediately (reversible; no data is deleted).</p>
+          <table class="data" id="accounts-table">
+            <thead>
+              <tr><th>Name</th><th>Email</th><th>Role</th><th>Scope</th><th>Joined</th><th class="num">Referrals</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
         <div class="card-block" id="advisor-panel" hidden>
           <h3>Advisor signup codes <span class="badge admin-badge">Admin</span></h3>
           <p class="muted small">Each advisor has a code that creates an account with access to all of that advisor's branches. Share it only with that advisor. Regenerate to revoke the old code (existing accounts stay signed in).</p>

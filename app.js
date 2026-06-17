@@ -102,12 +102,13 @@
     $("#dash-title").textContent = branches.length > 1 ? "Branch goals" : ((branches[0] || "") + " goals");
     $("#admin-panel").hidden = !admin;
     $("#advisor-panel").hidden = !admin;
+    $("#accounts-panel").hidden = !admin;
     // Goals are admin-managed; hide the Goals tab from advisors/branch users.
     $$(".tab").forEach((t) => { if (t.dataset.tab === "goals") t.hidden = !admin; });
     // Single-branch users have nothing to filter, so hide the report branch filter.
     $("#rep-branch-wrap").hidden = branches.length <= 1;
     populateBranchSelects();
-    if (admin) { renderBranchCodes(); renderAdvisorCodes(); }
+    if (admin) { renderBranchCodes(); renderAdvisorCodes(); renderAccounts(); }
   }
 
   Api.onUnauthorized = () => {
@@ -881,6 +882,50 @@
         codeEl.textContent = r.code;
       } catch (err) { alert("Could not regenerate: " + err.message); }
     }
+  });
+
+  // ---- Admin: accounts -----------------------------------------------------
+  const ROLE_LABEL = { admin: "Admin", advisor: "Advisor", user: "Branch" };
+  async function renderAccounts() {
+    const tbody = $("#accounts-table tbody");
+    if (!tbody) return;
+    const meId = (Api.currentUser() || {}).id;
+    try {
+      const accounts = await Api.listAccounts();
+      tbody.innerHTML = accounts
+        .map((a) => {
+          const isMe = a.id === meId;
+          const action = isMe
+            ? `<span class="muted small">you</span>`
+            : `<button class="link-btn ${a.active ? "del" : ""}" data-act="toggle" data-active="${a.active ? "1" : "0"}">${a.active ? "Deactivate" : "Reactivate"}</button>`;
+          return `<tr data-id="${esc(a.id)}" class="${a.active ? "" : "row-disabled"}">
+            <td>${esc(a.name || "—")}</td>
+            <td class="muted small">${esc(a.email)}</td>
+            <td>${esc(ROLE_LABEL[a.role] || a.role)}</td>
+            <td class="muted small">${esc(a.scope || "")}</td>
+            <td class="muted small">${esc(a.created || "")}</td>
+            <td class="num">${a.referralCount}</td>
+            <td class="row-actions">${action}</td>
+          </tr>`;
+        })
+        .join("");
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="7" class="muted">Could not load accounts: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  $("#accounts-table tbody").addEventListener("click", async (e) => {
+    const btn = e.target.closest('[data-act="toggle"]');
+    if (!btn) return;
+    const tr = e.target.closest("tr");
+    const id = tr.dataset.id;
+    const currentlyActive = btn.dataset.active === "1";
+    const name = tr.firstElementChild.textContent;
+    if (!confirm(`${currentlyActive ? "Deactivate" : "Reactivate"} ${name}'s account?`)) return;
+    try {
+      await Api.setAccountActive(id, !currentlyActive);
+      renderAccounts();
+    } catch (err) { alert("Could not update account: " + err.message); }
   });
 
   // =========================================================================

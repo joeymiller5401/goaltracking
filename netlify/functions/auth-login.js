@@ -16,10 +16,13 @@ exports.handler = async (event) => {
   try {
     await ensureSchema();
     const q = sql();
-    const rows = await q`SELECT id, email, name, password_hash, role, branch, advisor FROM users WHERE email = ${email}`;
+    const rows = await q`SELECT id, email, name, password_hash, role, branch, advisor, active FROM users WHERE email = ${email}`;
     const u = rows[0];
     if (!u || !verifyPassword(password, u.password_hash)) {
       return json(401, { error: "Invalid email or password" });
+    }
+    if (u.active === false) {
+      return json(403, { error: "This account has been deactivated. Contact an administrator." });
     }
     const branches = u.role === "admin" ? BRANCHES : allowedBranches(u);
     const token = signToken({ sub: u.id, email: u.email, name: u.name, role: u.role, branch: u.branch, advisor: u.advisor });
