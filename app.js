@@ -79,18 +79,32 @@
     const u = Api.currentUser();
     return !!(u && u.role === "admin");
   }
+  // Branches the signed-in user may work with (admins get all).
+  function userBranches() {
+    const u = Api.currentUser() || {};
+    if (u.role === "admin") return BRANCHES.slice();
+    if (Array.isArray(u.branches) && u.branches.length) return u.branches.slice();
+    return u.branch ? [u.branch] : [];
+  }
+  // Can the user choose among multiple branches (admin or multi-branch advisor)?
+  function canChooseBranch() {
+    return isAdmin() || userBranches().length > 1;
+  }
 
   // Show/hide cross-branch UI based on the signed-in user's role.
   function applyRole() {
     const u = Api.currentUser() || {};
     const admin = u.role === "admin";
-    $("#user-name").textContent =
-      (u.name || u.email || "") + (admin ? " · Admin" : (u.branch ? " · " + u.branch : ""));
-    $("#dash-title").textContent = admin ? "Branch goals" : ((u.branch || "") + " goals");
+    const branches = userBranches();
+    const roleLabel = admin ? "Admin" : (u.role === "advisor" ? (u.advisor || "Advisor") : (u.branch || ""));
+    $("#user-name").textContent = (u.name || u.email || "") + (roleLabel ? " · " + roleLabel : "");
+    $("#dash-title").textContent = branches.length > 1 ? "Branch goals" : ((branches[0] || "") + " goals");
     $("#admin-panel").hidden = !admin;
-    // Branch users see only their branch, so the report branch filter is hidden.
-    $("#rep-branch-wrap").hidden = !admin;
-    if (admin) renderBranchCodes();
+    $("#advisor-panel").hidden = !admin;
+    // Single-branch users have nothing to filter, so hide the report branch filter.
+    $("#rep-branch-wrap").hidden = branches.length <= 1;
+    populateBranchSelects();
+    if (admin) { renderBranchCodes(); renderAdvisorCodes(); }
   }
 
   Api.onUnauthorized = () => {
@@ -182,13 +196,16 @@
   });
 
   // ---- Branch, advisor & employee option lists -----------------------------
+  // Dropdowns reflect the signed-in user's allowed branches.
   function populateBranchSelects() {
-    const branchOpts = BRANCHES.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
+    const opt = (v) => `<option value="${esc(v)}">${esc(v)}</option>`;
+    const branchOpts = userBranches().map(opt).join("");
     $("#ref-branch").innerHTML = `<option value="">Select branch…</option>` + branchOpts;
-    $("#goal-branch").innerHTML = `<option value="">All branches</option>` + branchOpts;
+    // Only admins can target "all branches" with a goal; others pick one.
+    $("#goal-branch").innerHTML = (isAdmin() ? `<option value="">All branches</option>` : "") + branchOpts;
     $("#rep-branch").innerHTML = `<option value="all">All branches</option>` + branchOpts;
 
-    const advisorOpts = ADVISORS.map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    const advisorOpts = ADVISORS.map(opt).join("");
     $("#ref-advisor").innerHTML = `<option value="">Select advisor…</option>` + advisorOpts;
     $("#rep-advisor").innerHTML = `<option value="all">All advisors</option>` + advisorOpts;
   }
@@ -296,12 +313,12 @@
     $("#ref-type").value = editing ? editing.type : "initial";
     $("#ref-employee").value = editing ? editing.employee : "";
     $("#ref-advisor").value = editing ? editing.advisor || "" : "";
-    if (isAdmin()) {
+    if (canChooseBranch()) {
       $("#ref-branch").disabled = false;
       $("#ref-branch").value = editing ? editing.branch || "" : "";
     } else {
-      // Branch users are pinned to their own branch.
-      $("#ref-branch").value = (Api.currentUser() || {}).branch || "";
+      // Single-branch users are pinned to their own branch.
+      $("#ref-branch").value = userBranches()[0] || "";
       $("#ref-branch").disabled = true;
     }
     $("#ref-client").value = editing ? editing.client : "";
@@ -326,7 +343,7 @@
       type: $("#ref-type").value,
       employee: $("#ref-employee").value.trim(),
       advisor: $("#ref-advisor").value,
-      branch: isAdmin() ? $("#ref-branch").value : ((Api.currentUser() || {}).branch || ""),
+      branch: canChooseBranch() ? $("#ref-branch").value : (userBranches()[0] || ""),
       client: $("#ref-client").value.trim(),
       amount: parseFloat($("#ref-amount").value) || 0,
       status: $("#ref-status").value,
@@ -615,11 +632,11 @@
     $("#goal-modal-title").textContent = editing ? "Edit goal" : "New goal";
     $("#goal-id").value = editing ? editing.id : "";
     $("#goal-name").value = editing ? editing.name : "";
-    if (isAdmin()) {
+    if (canChooseBranch()) {
       $("#goal-branch").disabled = false;
       $("#goal-branch").value = editing ? editing.branch || "" : "";
     } else {
-      $("#goal-branch").value = (Api.currentUser() || {}).branch || "";
+      $("#goal-branch").value = userBranches()[0] || "";
       $("#goal-branch").disabled = true;
     }
     $("#goal-amount-target").value = editing && editing.amountTarget ? editing.amountTarget : "";
@@ -644,7 +661,7 @@
     const id = $("#goal-id").value;
     const data = {
       name: $("#goal-name").value.trim(),
-      branch: isAdmin() ? $("#goal-branch").value : ((Api.currentUser() || {}).branch || ""),
+      branch: canChooseBranch() ? $("#goal-branch").value : (userBranches()[0] || ""),
       amountTarget: parseFloat($("#goal-amount-target").value) || 0,
       qualifiedTarget: parseFloat($("#goal-qualified-target").value) || 0,
       start: $("#goal-start").value || "",
@@ -736,19 +753,20 @@
     </div>`;
   }
 
-  // Dashboard: admins see a box per branch; a branch user sees large feature
-  // cards for their own branch's goals.
+  // Dashboard: multi-branch users (admin / advisor) see a box per branch; a
+  // single-branch user sees large feature cards for their branch's goals.
   function renderDashboard() {
     const grid = $("#branch-goal-grid");
     if (!grid) return;
-    const admin = isAdmin();
-    if (admin) {
+    const branches = userBranches();
+    if (branches.length > 1) {
       grid.className = "branch-grid";
-      grid.innerHTML = BRANCHES.map(branchBoxHTML).join("");
-      $("#dash-empty").hidden = goals.length !== 0;
-      $("#dash-intro").hidden = goals.length === 0;
+      grid.innerHTML = branches.map(branchBoxHTML).join("");
+      const any = goals.some((g) => branches.includes(g.branch));
+      $("#dash-empty").hidden = any;
+      $("#dash-intro").hidden = !any;
     } else {
-      const branch = (Api.currentUser() || {}).branch || "";
+      const branch = branches[0] || "";
       const list = goals.filter((g) => g.branch === branch);
       grid.className = "feature-grid";
       grid.innerHTML = list.map(featureGoalCardHTML).join("");
@@ -816,6 +834,52 @@
     }
   });
 
+  // ---- Admin: advisor signup codes ----------------------------------------
+  async function renderAdvisorCodes() {
+    const tbody = $("#advisor-codes-table tbody");
+    if (!tbody) return;
+    try {
+      const codes = await Api.listAdvisorCodes();
+      tbody.innerHTML = codes
+        .map(
+          (c) => `<tr data-advisor="${esc(c.advisor)}">
+            <td>${esc(c.advisor)}</td>
+            <td class="muted small">${esc((c.branches || []).join(", "))}</td>
+            <td><code class="code">${esc(c.code)}</code></td>
+            <td class="row-actions">
+              <button class="link-btn" data-act="copy">Copy</button>
+              <button class="link-btn" data-act="regen">Regenerate</button>
+            </td>
+          </tr>`
+        )
+        .join("");
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" class="muted">Could not load codes: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  $("#advisor-codes-table tbody").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    const tr = e.target.closest("tr");
+    const advisor = tr.dataset.advisor;
+    const codeEl = tr.querySelector(".code");
+    if (btn.dataset.act === "copy") {
+      try {
+        await navigator.clipboard.writeText(codeEl.textContent);
+        const prev = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(() => (btn.textContent = prev), 1200);
+      } catch (err) { /* clipboard unavailable */ }
+    } else if (btn.dataset.act === "regen") {
+      if (!confirm(`Regenerate the signup code for ${advisor}? The old code stops working immediately.`)) return;
+      try {
+        const r = await Api.regenAdvisorCode(advisor);
+        codeEl.textContent = r.code;
+      } catch (err) { alert("Could not regenerate: " + err.message); }
+    }
+  });
+
   // =========================================================================
   //  REPORTS (customizable)
   // =========================================================================
@@ -827,8 +891,9 @@
   }
 
   function reportFilteredReferrals() {
-    const admin = isAdmin();
-    const branchSel = admin ? $("#rep-branch").value : ((Api.currentUser() || {}).branch || "");
+    // Data is already scoped server-side to the user's branches, so we can read
+    // the branch selector directly ("all" = all branches the user can see).
+    const branchSel = $("#rep-branch").value;
     const advisorSel = $("#rep-advisor").value;
     const typeSel = $("#rep-type").value;
     const statusSel = $("#rep-status").value;
@@ -1053,7 +1118,7 @@
   //  INIT
   // =========================================================================
   async function init() {
-    populateBranchSelects();
+    // Dropdowns are populated per-user in applyRole() once we know the account.
     if (Api.hasToken()) {
       try {
         await Api.me();   // validate the stored token

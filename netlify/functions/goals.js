@@ -11,6 +11,7 @@ const { requireUser } = require("./_lib/auth");
 const { encrypt, decrypt } = require("./_lib/crypto");
 const { json } = require("./_lib/respond");
 const { BRANCHES } = require("./_lib/branches");
+const { allowedBranches } = require("./_lib/advisors");
 
 function rowToGoal(r) {
   const d = decrypt(r.enc);
@@ -55,7 +56,8 @@ exports.handler = async (event) => {
     const q = sql();
     const user = await getAccount(token.sub);
     if (!user) return json(401, { error: "Not authenticated" });
-    const isAdmin = user.role === "admin";
+    const allowed = allowedBranches(user); // null = all (admin)
+    const canSee = (branch) => allowed === null || allowed.includes(branch);
     const method = event.httpMethod;
     const id = event.queryStringParameters && event.queryStringParameters.id;
 
@@ -67,7 +69,7 @@ exports.handler = async (event) => {
                enc, created_at
         FROM goals ORDER BY created_at ASC`;
       let out = rows.map(rowToGoal);
-      if (!isAdmin) out = out.filter((g) => g.branch === user.branch);
+      if (allowed !== null) out = out.filter((g) => canSee(g.branch));
       return json(200, { goals: out });
     }
 
@@ -77,14 +79,14 @@ exports.handler = async (event) => {
       const v = validate(b);
       if (v.error) return json(400, { error: v.error });
 
-      // Admins may target a specific branch or "" (all branches); branch users
-      // are pinned to their own branch.
-      let branch;
-      if (isAdmin) {
-        branch = String(b.branch || "").trim();
+      // Admins may target a specific branch or "" (all branches); everyone else
+      // must pick one of their allowed branches.
+      let branch = String(b.branch || "").trim();
+      if (allowed === null) {
         if (branch && !BRANCHES.includes(branch)) return json(400, { error: "Unknown branch" });
       } else {
-        branch = user.branch || "";
+        if (!branch && allowed.length === 1) branch = allowed[0];
+        if (!branch || !canSee(branch)) return json(403, { error: "Pick one of your branches" });
       }
       const enc = JSON.stringify(encrypt({ name: b.name, branch }));
 
@@ -99,7 +101,7 @@ exports.handler = async (event) => {
       if (!id) return json(400, { error: "Missing id" });
       const current = await fetchRow(q, id);
       if (!current) return json(404, { error: "Goal not found" });
-      if (!isAdmin && current.branch !== user.branch) return json(403, { error: "Not allowed" });
+      if (!canSee(current.branch)) return json(403, { error: "Not allowed" });
 
       const upd = await q`
         UPDATE goals
@@ -113,10 +115,10 @@ exports.handler = async (event) => {
 
     if (method === "DELETE") {
       if (!id) return json(400, { error: "Missing id" });
-      if (!isAdmin) {
+      if (allowed !== null) {
         const current = await fetchRow(q, id);
         if (!current) return json(404, { error: "Goal not found" });
-        if (current.branch !== user.branch) return json(403, { error: "Not allowed" });
+        if (!canSee(current.branch)) return json(403, { error: "Not allowed" });
       }
       await q`DELETE FROM goals WHERE id = ${id}`;
       return json(200, { ok: true });

@@ -99,6 +99,7 @@ amounts, or notes — only ciphertext.
   a Bearer token over HTTPS.
 - **Accounts & roles:** every user has an account and a role:
   - **Admin** — full access across all branches.
+  - **Advisor** — access restricted to the set of branches that advisor covers.
   - **Branch user** — access restricted to a single branch.
 - **Server-side scoping:** a branch user's referral and goal data is filtered to
   their branch **in the API**, and create/update/delete operations are

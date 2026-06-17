@@ -61,5 +61,8 @@ window.Api = (function () {
 
     listBranchCodes() { return req("/branch-codes").then((r) => r.codes); },
     regenBranchCode(branch) { return req("/branch-codes", "POST", { branch }); },
+
+    listAdvisorCodes() { return req("/advisor-codes").then((r) => r.codes); },
+    regenAdvisorCode(advisor) { return req("/advisor-codes", "POST", { advisor }); },
   };
 })();

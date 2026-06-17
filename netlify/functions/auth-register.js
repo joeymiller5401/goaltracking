@@ -1,6 +1,8 @@
 const { sql, ensureSchema } = require("./_lib/db");
 const { hashPassword, signToken } = require("./_lib/auth");
 const { json } = require("./_lib/respond");
+const { BRANCHES } = require("./_lib/branches");
+const { allowedBranches } = require("./_lib/advisors");
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
@@ -21,15 +23,19 @@ exports.handler = async (event) => {
     await ensureSchema();
     const q = sql();
 
-    // Resolve the code: the admin code (env) grants full access; otherwise it
-    // must match a branch signup code, which ties the account to that branch.
-    let role = null, branch = null;
+    // Resolve the code: admin (env) → full access; advisor code → that
+    // advisor's branches; branch code → that single branch.
+    let role = null, branch = null, advisor = null;
     if (process.env.SIGNUP_CODE && code === process.env.SIGNUP_CODE) {
       role = "admin";
-      branch = null;
     } else {
-      const rows = await q`SELECT branch FROM branch_codes WHERE code = ${code}`;
-      if (rows.length) { role = "user"; branch = rows[0].branch; }
+      const adv = await q`SELECT advisor FROM advisor_codes WHERE code = ${code}`;
+      if (adv.length) {
+        role = "advisor"; advisor = adv[0].advisor;
+      } else {
+        const br = await q`SELECT branch FROM branch_codes WHERE code = ${code}`;
+        if (br.length) { role = "user"; branch = br[0].branch; }
+      }
     }
     if (!role) return json(403, { error: "Invalid signup code" });
 
@@ -38,12 +44,13 @@ exports.handler = async (event) => {
 
     const ph = hashPassword(password);
     const rows = await q`
-      INSERT INTO users (email, name, password_hash, role, branch)
-      VALUES (${email}, ${name}, ${ph}, ${role}, ${branch})
-      RETURNING id, email, name, role, branch`;
+      INSERT INTO users (email, name, password_hash, role, branch, advisor)
+      VALUES (${email}, ${name}, ${ph}, ${role}, ${branch}, ${advisor})
+      RETURNING id, email, name, role, branch, advisor`;
     const u = rows[0];
-    const token = signToken({ sub: u.id, email: u.email, name: u.name, role: u.role, branch: u.branch });
-    return json(200, { token, user: { id: u.id, email: u.email, name: u.name, role: u.role, branch: u.branch } });
+    const branches = role === "admin" ? BRANCHES : allowedBranches(u);
+    const token = signToken({ sub: u.id, email: u.email, name: u.name, role: u.role, branch: u.branch, advisor: u.advisor });
+    return json(200, { token, user: { id: u.id, email: u.email, name: u.name, role: u.role, branch: u.branch, advisor: u.advisor, branches } });
   } catch (e) {
     console.error("register error", e);
     return json(500, { error: "Server error" });

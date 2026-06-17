@@ -10,6 +10,7 @@ const { requireUser } = require("./_lib/auth");
 const { encrypt, decrypt } = require("./_lib/crypto");
 const { json } = require("./_lib/respond");
 const { BRANCHES } = require("./_lib/branches");
+const { allowedBranches } = require("./_lib/advisors");
 
 function rowToReferral(r) {
   const d = decrypt(r.enc);
@@ -60,7 +61,8 @@ exports.handler = async (event) => {
     const q = sql();
     const user = await getAccount(token.sub);
     if (!user) return json(401, { error: "Not authenticated" });
-    const isAdmin = user.role === "admin";
+    const allowed = allowedBranches(user); // null = all (admin)
+    const canSee = (branch) => allowed === null || allowed.includes(branch);
     const method = event.httpMethod;
     const id = event.queryStringParameters && event.queryStringParameters.id;
 
@@ -71,7 +73,7 @@ exports.handler = async (event) => {
         FROM referrals r LEFT JOIN users u ON u.id = r.owner_id
         ORDER BY r.date DESC, r.created_at DESC`;
       let out = rows.map(rowToReferral);
-      if (!isAdmin) out = out.filter((r) => r.branch === user.branch);
+      if (allowed !== null) out = out.filter((r) => canSee(r.branch));
       return json(200, { referrals: out });
     }
 
@@ -81,10 +83,17 @@ exports.handler = async (event) => {
       const v = validate(b);
       if (v.error) return json(400, { error: v.error });
 
-      // Branch users are pinned to their own branch; admins choose one.
-      const branch = isAdmin ? String(b.branch || "").trim() : (user.branch || "");
-      if (!branch) return json(400, { error: "Branch is required" });
-      if (isAdmin && !BRANCHES.includes(branch)) return json(400, { error: "Unknown branch" });
+      // Determine the branch: admins choose any; everyone else must pick one of
+      // their allowed branches (single-branch users default to theirs).
+      let branch = String(b.branch || "").trim();
+      if (allowed === null) {
+        if (!branch) return json(400, { error: "Branch is required" });
+        if (!BRANCHES.includes(branch)) return json(400, { error: "Unknown branch" });
+      } else {
+        if (!branch && allowed.length === 1) branch = allowed[0];
+        if (!branch) return json(400, { error: "Branch is required" });
+        if (!canSee(branch)) return json(403, { error: "Not allowed for that branch" });
+      }
 
       const enc = JSON.stringify(
         encrypt({ employee: b.employee, advisor: b.advisor || "", branch, client: b.client, amount: v.amount, notes: b.notes })
@@ -101,7 +110,7 @@ exports.handler = async (event) => {
       if (!id) return json(400, { error: "Missing id" });
       const current = await fetchRow(q, id);
       if (!current) return json(404, { error: "Referral not found" });
-      if (!isAdmin && current.branch !== user.branch) return json(403, { error: "Not allowed" });
+      if (!canSee(current.branch)) return json(403, { error: "Not allowed" });
 
       const upd = await q`
         UPDATE referrals
@@ -114,10 +123,10 @@ exports.handler = async (event) => {
 
     if (method === "DELETE") {
       if (!id) return json(400, { error: "Missing id" });
-      if (!isAdmin) {
+      if (allowed !== null) {
         const current = await fetchRow(q, id);
         if (!current) return json(404, { error: "Referral not found" });
-        if (current.branch !== user.branch) return json(403, { error: "Not allowed" });
+        if (!canSee(current.branch)) return json(403, { error: "Not allowed" });
       }
       await q`DELETE FROM referrals WHERE id = ${id}`;
       return json(200, { ok: true });

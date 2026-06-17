@@ -226,6 +226,17 @@
       <section class="panel" id="tab-settings">
         <div class="panel-head"><h2>Settings</h2></div>
 
+        <div class="card-block" id="advisor-panel" hidden>
+          <h3>Advisor signup codes <span class="badge admin-badge">Admin</span></h3>
+          <p class="muted small">Each advisor has a code that creates an account with access to all of that advisor's branches. Share it only with that advisor. Regenerate to revoke the old code (existing accounts stay signed in).</p>
+          <table class="data" id="advisor-codes-table">
+            <thead>
+              <tr><th>Advisor</th><th>Branches</th><th>Signup code</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
         <div class="card-block" id="admin-panel" hidden>
           <h3>Branch signup codes <span class="badge admin-badge">Admin</span></h3>
           <p class="muted small">Each branch has its own code. Share a branch's code only with that branch's staff — anyone who signs up with it can see and manage that branch's referrals. Regenerate a code to revoke the old one (existing accounts stay signed in).</p>

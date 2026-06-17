@@ -5,6 +5,7 @@
 const { neon } = require("@neondatabase/serverless");
 const crypto = require("crypto");
 const { BRANCHES } = require("./branches");
+const { ADVISORS } = require("./advisors");
 
 let _sql = null;
 function sql() {
@@ -39,12 +40,14 @@ async function ensureSchema() {
     password_hash text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
   )`;
-  // Role/branch for access control. Added via ALTER so existing tables migrate.
+  // Role/branch/advisor for access control. Added via ALTER so existing tables migrate.
   await q`ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'user'`;
   await q`ALTER TABLE users ADD COLUMN IF NOT EXISTS branch text`;
-  // Invariant: a non-admin always has a branch; anyone without a branch is an
-  // admin. This promotes pre-existing (pre-roles) accounts to admin.
-  await q`UPDATE users SET role = 'admin' WHERE branch IS NULL AND role <> 'admin'`;
+  await q`ALTER TABLE users ADD COLUMN IF NOT EXISTS advisor text`;
+  // Invariant: an account scoped to neither a branch nor an advisor is an admin.
+  // This promotes pre-existing (pre-roles) accounts to admin without touching
+  // branch users (have a branch) or advisors (have an advisor).
+  await q`UPDATE users SET role = 'admin' WHERE branch IS NULL AND advisor IS NULL AND role <> 'admin'`;
 
   await q`CREATE TABLE IF NOT EXISTS referrals (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -85,13 +88,23 @@ async function ensureSchema() {
             ON CONFLICT (branch) DO NOTHING`;
   }
 
+  // Per-advisor signup codes (grant access to that advisor's branches).
+  await q`CREATE TABLE IF NOT EXISTS advisor_codes (
+    advisor text PRIMARY KEY,
+    code text NOT NULL
+  )`;
+  for (const a of ADVISORS) {
+    await q`INSERT INTO advisor_codes (advisor, code) VALUES (${a}, ${genBranchCode(a)})
+            ON CONFLICT (advisor) DO NOTHING`;
+  }
+
   schemaReady = true;
 }
 
 // Authoritative role/branch for a user id — looked up per request so that
 // access reflects the current database state, not a possibly-stale token.
 async function getAccount(id) {
-  const rows = await sql()`SELECT id, email, name, role, branch FROM users WHERE id = ${id}`;
+  const rows = await sql()`SELECT id, email, name, role, branch, advisor FROM users WHERE id = ${id}`;
   return rows[0] || null;
 }
 
