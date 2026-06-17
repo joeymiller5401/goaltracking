@@ -96,7 +96,8 @@
     const u = Api.currentUser() || {};
     const admin = u.role === "admin";
     const branches = userBranches();
-    const roleLabel = admin ? "Admin" : (u.role === "advisor" ? (u.advisor || "Advisor") : (u.branch || ""));
+    // Show the user's branches (admins show "Admin").
+    const roleLabel = admin ? "Admin" : branches.join(", ");
     $("#user-name").textContent = (u.name || u.email || "") + (roleLabel ? " · " + roleLabel : "");
     $("#dash-title").textContent = branches.length > 1 ? "Branch goals" : ((branches[0] || "") + " goals");
     $("#admin-panel").hidden = !admin;
